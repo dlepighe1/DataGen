@@ -1,6 +1,5 @@
 import React from 'react';
 import { ArrowDown, Database, Search } from 'lucide-react';
-// Make sure the Card components are available at this path or adjust as needed
 import { Card, CardContent, CardHeader, CardTitle } from '../components/Card';
 
 const Extras = () => {
