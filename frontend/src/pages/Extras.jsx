@@ -1,6 +1,6 @@
 import React from 'react';
 import { ArrowDown, Database, Search } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/Card';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/UI/Card';
 
 const Extras = () => {
   const datasets = [
