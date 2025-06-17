@@ -1,725 +1,462 @@
-// src/pages/Generate.jsx
-import React, { useState } from "react";
-import {
-  Download,
-  FileText,
-  Database,
-  Settings,
-  Wand2,
-  Plus,
-  Trash2,
-} from "lucide-react";
-import { Card, CardHeader, CardTitle, CardContent } from "../components/UI/Card";
-
-// Make sure these are imported:
-import { Label } from "../components/UI/Label";
-import { Slider } from "../components/UI/Slider";
-import { Switch } from "../components/UI/Switch";
+import React, { useState } from 'react';
+import { Download, FileText, Database, Settings, Wand2, Plus, Trash2 } from 'lucide-react';
+import { Button } from '../components/UI/Button';
+import { Input } from '../components/UI/Input';
+import { Label } from '../components/UI/Label';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/UI/Card';
+import { Textarea } from '../components/UI/Textarea';
+import { Slider } from '../components/UI/Slider';
+import { Switch } from '../components/UI/Switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/UI/Select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/UI/Tabs';
+import { toast } from '../components/Use-toast';
 
 const Generate = () => {
-  const [columns, setColumns] = useState([
-    {
-      name: "Name",
-      type: "string",
-      nanPercentage: 0,
-      addNoise: false,
-      noiseLevel: 0,
-      addOutliers: false,
-      outlierPercentage: 0,
-      numberType: "integers",
-      minValue: 0,
-      maxValue: 100,
-    },
-    {
-      name: "Age",
-      type: "number",
-      nanPercentage: 0,
-      addNoise: false,
-      noiseLevel: 0,
-      addOutliers: false,
-      outlierPercentage: 0,
-      numberType: "integers",
-      minValue: 18,
-      maxValue: 80,
-    },
-    {
-      name: "Email",
-      type: "email",
-      nanPercentage: 0,
-      addNoise: false,
-      noiseLevel: 0,
-      addOutliers: false,
-      outlierPercentage: 0,
-      numberType: "integers",
-      minValue: 0,
-      maxValue: 0,
-    },
-  ]);
-
-  const [newColumnName, setNewColumnName] = useState("");
+  const [columns, setColumns] = useState([]);
+  const [newColumnName, setNewColumnName] = useState('');
   const [rowCount, setRowCount] = useState(100);
-  const [customInstructions, setCustomInstructions] = useState("");
-  const [selectedTemplate, setSelectedTemplate] = useState("");
+  const [customInstructions, setCustomInstructions] = useState('');
+  const [selectedTemplate, setSelectedTemplate] = useState('');
   const [generatedData, setGeneratedData] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [activeTab, setActiveTab] = useState("manual");
-  const [distributionType, setDistributionType] = useState("balanced");
+  const [activeTab, setActiveTab] = useState('manual');
+  const [distributionType, setDistributionType] = useState('balanced');
 
   const datasetTemplates = [
-    {
-      value: "ecommerce",
-      label: "E-commerce Customer Data",
-      description:
-        "Customer profiles with purchase history, preferences, and demographics",
-    },
-    {
-      value: "financial",
-      label: "Financial Records",
-      description: "Transaction data, account balances, and financial metrics",
-    },
-    {
-      value: "healthcare",
-      label: "Healthcare Data",
-      description: "Patient records, medical metrics, and treatment information",
-    },
-    {
-      value: "education",
-      label: "Educational Data",
-      description:
-        "Student records, grades, courses, and academic performance",
-    },
-    {
-      value: "marketing",
-      label: "Marketing Analytics",
-      description: "Campaign performance, user engagement, and conversion metrics",
-    },
-    {
-      value: "iot",
-      label: "IoT Sensor Data",
-      description: "Time-series data from various sensors and devices",
-    },
+    { value: 'ecommerce', label: 'E-commerce Customer Data', description: 'Customer profiles with purchase history, preferences, and demographics' },
+    { value: 'financial', label: 'Financial Records', description: 'Transaction data, account balances, and financial metrics' },
+    { value: 'healthcare', label: 'Healthcare Data', description: 'Patient records, medical metrics, and treatment information' },
+    { value: 'education', label: 'Educational Data', description: 'Student records, grades, courses, and academic performance' },
+    { value: 'marketing', label: 'Marketing Analytics', description: 'Campaign performance, user engagement, and conversion metrics' },
+    { value: 'iot', label: 'IoT Sensor Data', description: 'Time-series data from various sensors and devices' }
   ];
 
   const addColumn = () => {
-    const trimmed = newColumnName.trim();
-    if (
-      trimmed &&
-      !columns.find((col) => col.name.toLowerCase() === trimmed.toLowerCase())
-    ) {
-      setColumns([
-        ...columns,
-        {
-          name: trimmed,
-          type: "string",
-          nanPercentage: 0,
-          addNoise: false,
-          noiseLevel: 0,
-          addOutliers: false,
-          outlierPercentage: 0,
-          numberType: "integers",
-          minValue: 0,
-          maxValue: 100,
-        },
-      ]);
-      setNewColumnName("");
+    const names = newColumnName
+      .split(',')
+      .map(name => name.trim())
+      .filter(name => name.length > 0);
+    const uniqueNames = names.filter((name, index, self) => self.indexOf(name) === index);
+    const newColumns = uniqueNames
+      .filter(name => !columns.find(col => col.name === name))
+      .map(name => ({
+        name,
+        type: 'string',
+        nanPercentage: 0,
+        addNoise: false,
+        noiseLevel: 0,
+        addOutliers: false,
+        outlierPercentage: 0,
+        numberType: 'integers'
+      }));
+    if (newColumns.length) {
+      setColumns([...columns, ...newColumns]);
+      setNewColumnName('');
     }
   };
 
-  const removeColumn = (index) => {
-    setColumns(columns.filter((_, i) => i !== index));
-  };
-
-  const updateColumn = (index, updates) => {
+  const removeColumn = idx => setColumns(columns.filter((_, i) => i !== idx));
+  const updateColumn = (idx, updates) => {
     const copy = [...columns];
-    copy[index] = { ...copy[index], ...updates };
+    copy[idx] = { ...copy[idx], ...updates };
     setColumns(copy);
   };
 
   const generateFromTemplate = () => {
     const templates = {
       ecommerce: [
-        {
-          name: "Customer_ID",
-          type: "string",
-          nanPercentage: 0,
-          addNoise: false,
-          noiseLevel: 0,
-          addOutliers: false,
-          outlierPercentage: 0,
-          numberType: "integers",
-          minValue: 0,
-          maxValue: 0,
-        },
-        {
-          name: "Name",
-          type: "string",
-          nanPercentage: 2,
-          addNoise: false,
-          noiseLevel: 0,
-          addOutliers: false,
-          outlierPercentage: 0,
-          numberType: "integers",
-          minValue: 0,
-          maxValue: 0,
-        },
-        {
-          name: "Age",
-          type: "number",
-          nanPercentage: 1,
-          addNoise: true,
-          noiseLevel: 2,
-          addOutliers: true,
-          outlierPercentage: 3,
-          numberType: "integers",
-          minValue: 18,
-          maxValue: 70,
-        },
-        {
-          name: "Email",
-          type: "email",
-          nanPercentage: 1,
-          addNoise: false,
-          noiseLevel: 0,
-          addOutliers: false,
-          outlierPercentage: 0,
-          numberType: "integers",
-          minValue: 0,
-          maxValue: 0,
-        },
-        {
-          name: "Purchase_Amount",
-          type: "number",
-          nanPercentage: 0,
-          addNoise: true,
-          noiseLevel: 5,
-          addOutliers: true,
-          outlierPercentage: 5,
-          numberType: "decimals",
-          minValue: 10,
-          maxValue: 1000,
-        },
+        { name: 'CustomerID', type: 'string' },
+        { name: 'Age', type: 'number', numberType: 'integers', minValue: 18, maxValue: 80 },
+        { name: 'Gender', type: 'string' },
+        { name: 'City', type: 'string' },
+        { name: 'TotalSpend', type: 'number', numberType: 'decimals', minValue: 10, maxValue: 1000 },
+        { name: 'LastPurchaseDate', type: 'date' },
+        { name: 'IsPrimeMember', type: 'boolean' }
       ],
       financial: [
-        {
-          name: "Account_ID",
-          type: "string",
-          nanPercentage: 0,
-          addNoise: false,
-          noiseLevel: 0,
-          addOutliers: false,
-          outlierPercentage: 0,
-          numberType: "integers",
-          minValue: 0,
-          maxValue: 0,
-        },
-        {
-          name: "Balance",
-          type: "number",
-          nanPercentage: 0,
-          addNoise: true,
-          noiseLevel: 3,
-          addOutliers: true,
-          outlierPercentage: 8,
-          numberType: "decimals",
-          minValue: 0,
-          maxValue: 100000,
-        },
-        {
-          name: "Transaction_Amount",
-          type: "number",
-          nanPercentage: 1,
-          addNoise: true,
-          noiseLevel: 4,
-          addOutliers: true,
-          outlierPercentage: 6,
-          numberType: "mixed",
-          minValue: -5000,
-          maxValue: 5000,
-        },
-        {
-          name: "Credit_Score",
-          type: "number",
-          nanPercentage: 3,
-          addNoise: true,
-          noiseLevel: 2,
-          addOutliers: true,
-          outlierPercentage: 4,
-          numberType: "integers",
-          minValue: 300,
-          maxValue: 850,
-        },
+        { name: 'TransactionID', type: 'string' },
+        { name: 'AccountID', type: 'string' },
+        { name: 'Amount', type: 'number', numberType: 'decimals', minValue: -5000, maxValue: 5000 },
+        { name: 'TransactionType', type: 'string' },
+        { name: 'TransactionDate', type: 'date' },
+        { name: 'BalanceAfterTransaction', type: 'number', numberType: 'decimals', minValue: 0, maxValue: 100000 },
+        { name: 'IsFraud', type: 'boolean' }
       ],
+      healthcare: [
+        { name: 'PatientID', type: 'string' },
+        { name: 'Age', type: 'number', numberType: 'integers', minValue: 0, maxValue: 100 },
+        { name: 'Diagnosis', type: 'string' },
+        { name: 'BloodPressure_Systolic', type: 'number', numberType: 'integers', minValue: 90, maxValue: 180 },
+        { name: 'BloodPressure_Diastolic', type: 'number', numberType: 'integers', minValue: 60, maxValue: 120 },
+        { name: 'Medication', type: 'string' },
+        { name: 'AdmissionDate', type: 'date' },
+        { name: 'DischargeDate', type: 'date' }
+      ],
+      education: [
+        { name: 'StudentID', type: 'string' },
+        { name: 'GradeLevel', type: 'number', numberType: 'integers', minValue: 1, maxValue: 12 },
+        { name: 'Major', type: 'string' },
+        { name: 'GPA', type: 'number', numberType: 'decimals', minValue: 1.0, maxValue: 4.0 },
+        { name: 'EnrollmentDate', type: 'date' },
+        { name: 'CourseCount', type: 'number', numberType: 'integers', minValue: 1, maxValue: 7 },
+        { name: 'ScholarshipRecipient', type: 'boolean' }
+      ],
+      marketing: [
+        { name: 'UserID', type: 'string' },
+        { name: 'CampaignID', type: 'string' },
+        { name: 'Impressions', type: 'number', numberType: 'integers', minValue: 100, maxValue: 10000 },
+        { name: 'Clicks', type: 'number', numberType: 'integers', minValue: 1, maxValue: 500 },
+        { name: 'Conversions', type: 'number', numberType: 'integers', minValue: 0, maxValue: 50 },
+        { name: 'AdSpend', type: 'number', numberType: 'decimals', minValue: 5, maxValue: 500 },
+        { name: 'Date', type: 'date' }
+      ],
+      iot: [
+        { name: 'DeviceID', type: 'string' },
+        { name: 'Timestamp', type: 'date' },
+        { name: 'TemperatureCelsius', type: 'number', numberType: 'decimals', minValue: -20, maxValue: 50 },
+        { name: 'Humidity', type: 'number', numberType: 'decimals', minValue: 0, maxValue: 100 },
+        { name: 'PressureKPa', type: 'number', numberType: 'decimals', minValue: 90, maxValue: 110 },
+        { name: 'BatteryLevel', type: 'number', numberType: 'integers', minValue: 0, maxValue: 100 },
+        { name: 'IsOnline', type: 'boolean' }
+      ]
     };
-
     if (selectedTemplate && templates[selectedTemplate]) {
       setColumns(templates[selectedTemplate]);
     }
   };
 
-  const generateData = () => {
-    setIsGenerating(true);
 
-    setTimeout(() => {
-      const data = Array.from({ length: rowCount }, (_, i) => {
-        const row = {};
-        columns.forEach((col) => {
-          if (Math.random() * 100 < col.nanPercentage) {
-            row[col.name] = null;
-            return;
-          }
-
-          let val;
-          const distorted = distributionType === "distorted";
-
-          switch (col.type) {
-            case "string":
-              val = `Sample ${col.name} ${i + 1}`;
-              if (col.addNoise && Math.random() < col.noiseLevel / 100) {
-                val += "_noisy";
-              }
-              break;
-            case "number":
-              const min = col.minValue || 0;
-              const max = col.maxValue || 100;
-              if (distorted) {
-                val =
-                  Math.random() < 0.7
-                    ? Math.random() * (max * 0.3 - min) + min
-                    : Math.random() * (max - min * 0.7) + min * 0.7;
-              } else {
-                val = Math.random() * (max - min) + min;
-              }
-              if (col.addNoise) {
-                const noise = (Math.random() - 0.5) * col.noiseLevel;
-                val += noise;
-              }
-              if (
-                col.addOutliers &&
-                Math.random() * 100 < col.outlierPercentage
-              ) {
-                val = Math.random() > 0.5 ? max * 2 : min / 2;
-              }
-              if (col.numberType === "integers") {
-                val = Math.round(val);
-              } else if (col.numberType === "decimals") {
-                val = Math.round(val * 100) / 100;
-              } else {
-                val =
-                  Math.random() > 0.5
-                    ? Math.round(val)
-                    : Math.round(val * 100) / 100;
-              }
-              break;
-            case "email":
-              val = `user${i + 1}@example.com`;
-              if (col.addNoise && Math.random() < col.noiseLevel / 100) {
-                val = `user${i + 1}@invalid`;
-              }
-              break;
-            case "date":
-              val = new Date(
-                Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000
-              )
-                .toISOString()
-                .split("T")[0];
-              break;
-            case "boolean":
-              val = distorted
-                ? Math.random() < 0.8
-                : Math.random() > 0.5;
-              if (col.addNoise && Math.random() < col.noiseLevel / 100) {
-                val = null;
-              }
-              break;
-            default:
-              val = `${col.name} ${i + 1}`;
-          }
-          row[col.name] = val;
-        });
-        return row;
-      });
-
-      setGeneratedData(data);
-      setIsGenerating(false);
-      window.alert(
-        `Generated ${data.length} rows with ${columns.length} columns.`
-      );
-    }, 1000);
-  };
-
-  const downloadData = (format) => {
-    if (!generatedData.length) {
-      window.alert("No data to download. Generate data first.");
+  const generateData = async () => {
+    if (!columns.length) {
+      toast({ title: 'No columns defined', variant: 'destructive' });
       return;
     }
+    setIsGenerating(true);
 
-    let content = "";
-    let filename = "";
-    let mime = "";
+    const configPayload = { rowCount, distributionType, customInstructions, template: selectedTemplate, columns };
+    try {
+      const resp = await fetch('http://localhost:5000/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(configPayload)
+      });
+      if (!resp.ok) {
+        const errorData = await resp.json(); // Assuming error response is JSON
+        throw new Error(errorData.details || errorData.error || 'Unknown error during generation.');
+      }
 
-    if (format === "csv") {
-      content = [
-        columns.map((c) => c.name).join(","),
-        ...generatedData.map((row) =>
-          columns.map((c) => row[c.name] ?? "").join(",")
-        ),
-      ].join("\n");
-      filename = "generated_data.csv";
-      mime = "text/csv";
-    } else if (format === "json") {
-      content = JSON.stringify(generatedData, null, 2);
-      filename = "generated_data.json";
-      mime = "application/json";
-    } else {
-      content = generatedData
-        .map((row) =>
-          columns.map((c) => `${c.name}: ${row[c.name] ?? "N/A"}`).join(" | ")
-        )
-        .join("\n");
-      filename = "generated_data.txt";
-      mime = "text/plain";
+      const { status, table } = await resp.json();
+      if (status === 'ok' && Array.isArray(table)) {
+        setGeneratedData(table);
+        toast({ title: 'Data Generated!', description: `Loaded ${table.length} rows.` });
+      } else {
+        throw new Error('Invalid data format received from server.');
+      }
+    } catch (err) {
+      toast({ title: 'Error Generating Data', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsGenerating(false);
     }
+  };
 
-    const blob = new Blob([content], { type: mime });
+  const downloadData = format => {
+    if (!generatedData.length) {
+      toast({ title: 'No Data to Download', description: 'Generate data first.', variant: 'destructive' });
+      return;
+    }
+    let content, filename, mimeType;
+    switch (format) {
+      case 'csv':
+        // Use the actual generated data's keys for CSV header if columns state is not fully representative
+        const csvColumns = columns.length > 0 ? columns.map(c => c.name) : Object.keys(generatedData[0] || {});
+        content = [
+          csvColumns.join(','),
+          ...generatedData.map(r => csvColumns.map(colName => r[colName] ?? '').join(','))
+        ].join('\n');
+        filename = 'data.csv';
+        mimeType = 'text/csv';
+        break;
+      case 'json':
+        content = JSON.stringify(generatedData, null, 2);
+        filename = 'data.json';
+        mimeType = 'application/json';
+        break;
+      case 'txt':
+        content = generatedData.map(r => columns.map(c => `${c.name}: ${r[c.name] ?? 'N/A'}`).join(' | ')).join('\n');
+        filename = 'data.txt';
+        mimeType = 'text/plain';
+        break;
+    }
+    const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
+    const a = document.createElement('a');
     a.href = url;
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
-
-    window.alert(`Your ${format.toUpperCase()} is downloading.`);
+    toast({ title: 'Download Started', description: filename });
   };
 
   return (
-    <div className="min-h-screen bg-[hsl(var(--background))] text-[hsl(var(--foreground))] p-6">
-      <div className="max-w-6xl mx-auto space-y-8">
-        {/* Header */}
-        <div className="border border-gray-300 rounded-lg p-6">
-          <h1 className="text-3xl font-bold mb-2">Generate Your Dataset</h1>
-          <p className="text-lg text-gray-600">
-            Configure columns and parameters below to create a custom dataset.
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4">
+      <div className="max-w-7xl mx-auto">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
+            Generate Your Dataset
+          </h1>
+          <p className="text-xl text-gray-600">
+            Create realistic, customizable datasets with advanced parameters
           </p>
         </div>
-
         <div className="grid lg:grid-cols-2 gap-8">
-          {/* Left Column */}
           <div className="space-y-6">
-            {/* Dataset Config Card */}
-            <Card>
+            {/* Configuration Card */}
+            <Card className="bg-white">
               <CardHeader>
                 <CardTitle>Dataset Configuration</CardTitle>
               </CardHeader>
               <CardContent>
-                {/* Tabs */}
-                <div className="flex space-x-2 mb-4">
-                  <button
-                    onClick={() => setActiveTab("manual")}
-                    className={`flex-1 py-2 rounded ${
-                      activeTab === "manual"
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-100 text-gray-700"
-                    }`}
-                  >
-                    Manual Setup
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("template")}
-                    className={`flex-1 py-2 rounded ${
-                      activeTab === "template"
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-100 text-gray-700"
-                    }`}
-                  >
-                    Templates
-                  </button>
-                </div>
+                <Tabs value={activeTab} onValueChange={setActiveTab}>
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="manual">Manual Setup</TabsTrigger>
+                    <TabsTrigger value="template">Templates</TabsTrigger>
+                  </TabsList>
 
-                {activeTab === "template" ? (
-                  <div className="space-y-4">
+                  {/* Templates Tab */}
+                  <TabsContent value="template" className="space-y-4">
                     <div>
                       <Label>Dataset Template</Label>
-                      <select
-                        value={selectedTemplate}
-                        onChange={(e) => setSelectedTemplate(e.target.value)}
-                        className="w-full border border-gray-300 p-2 rounded"
-                      >
-                        <option value="">— Select a template —</option>
-                        {datasetTemplates.map((t) => (
-                          <option key={t.value} value={t.value}>
-                            {t.label}
-                          </option>
-                        ))}
-                      </select>
+                      <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                        <SelectTrigger className="mt-2">
+                          <SelectValue placeholder="Choose a template" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {datasetTemplates.map(t => (
+                            <SelectItem key={t.value} value={t.value}>
+                              {t.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       {selectedTemplate && (
-                        <p className="text-sm text-gray-600 mt-1">
-                          {
-                            datasetTemplates.find(
-                              (t) => t.value === selectedTemplate
-                            )?.description
-                          }
+                        <p className="text-sm text-gray-600 mt-2">
+                          {datasetTemplates.find(t => t.value === selectedTemplate).description}
                         </p>
                       )}
                     </div>
-                    <button
+                    <Button
                       onClick={generateFromTemplate}
                       disabled={!selectedTemplate}
-                      className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-2 rounded disabled:opacity-50"
+                      className="w-full bg-[hsl(var(--primary))] text-white hover:bg-[hsl(var(--primary)/0.85)] active:scale-95 transition"
                     >
-                      <Wand2 className="h-5 w-5" />
-                      Load Template
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
+                      <Wand2 className="h-4 w-4 mr-2" /> Load Template
+                    </Button>
+                  </TabsContent>
+
+                  {/* Manual Tab */}
+                  <TabsContent value="manual" className="space-y-4">
                     <div>
                       <Label htmlFor="new-column">Add New Column</Label>
-                      <div className="flex space-x-2">
-                        <input
+                      <div className="flex space-x-2 mt-2">
+                        <Input
                           id="new-column"
-                          type="text"
+                          className="border-1 border-gray-300"
                           value={newColumnName}
-                          onChange={(e) => setNewColumnName(e.target.value)}
-                          onKeyPress={(e) =>
-                            e.key === "Enter" ? addColumn() : null
-                          }
-                          placeholder="Column name"
-                          className="flex-1 border border-gray-300 p-2 rounded"
+                          onChange={e => setNewColumnName(e.target.value)}
+                          placeholder="Enter column name"
+                          onKeyPress={e => e.key === 'Enter' && addColumn()}
                         />
-                        <button
+                        <Button
                           onClick={addColumn}
-                          className="bg-blue-600 text-white p-2 rounded"
+                          className="bg-[hsl(var(--primary))] text-white hover:bg-[hsl(var(--primary)/0.85)] active:scale-95 transition"
                         >
-                          <Plus className="h-5 w-5" />
-                        </button>
+                          <Plus className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
-                  </div>
-                )}
+                  </TabsContent>
+                </Tabs>
 
                 <div className="mt-6 space-y-4">
                   <div>
                     <Label htmlFor="row-count">Number of Rows</Label>
-                    <input
+                    <Input
                       id="row-count"
                       type="number"
+                      className="mt-2 border-1 border-gray-300"
                       value={rowCount}
-                      onChange={(e) => setRowCount(parseInt(e.target.value) || 0)}
+                      onChange={e => setRowCount(+e.target.value)}
                       min="1"
                       max="10000"
-                      className="w-full border border-gray-300 p-2 rounded"
                     />
                   </div>
-
                   <div>
                     <Label>Distribution Type</Label>
-                    <select
+                    <Select
                       value={distributionType}
-                      onChange={(e) => setDistributionType(e.target.value)}
-                      className="w-full border border-gray-300 p-2 rounded"
+                      onValueChange={setDistributionType}
                     >
-                      <option value="balanced">Balanced Dataset</option>
-                      <option value="distorted">Distorted/Noisy Dataset</option>
-                    </select>
+                      <SelectTrigger className="mt-2">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="balanced">Balanced Dataset</SelectItem>
+                        <SelectItem value="distorted">Distorted/Noisy Dataset</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <p className="text-sm text-gray-600 mt-1">
-                      {distributionType === "balanced"
-                        ? "Well-balanced data for standard training"
-                        : "Noisy, distorted data for data-cleaning practice"}
+                      {distributionType === 'balanced'
+                        ? 'Well-balanced data for standard training'
+                        : 'Noisy, distorted data for data cleaning practice'}
                     </p>
                   </div>
-
                   <div>
-                    <Label htmlFor="custom-instructions">
-                      Custom Instructions
-                    </Label>
-                    <textarea
+                    <Label htmlFor="custom-instructions">Custom Instructions</Label>
+                    <Textarea
                       id="custom-instructions"
+                      className="mt-2 border-1 border-gray-300"
                       value={customInstructions}
-                      onChange={(e) => setCustomInstructions(e.target.value)}
-                      placeholder="Any special requirements or patterns…"
-                      className="w-full border border-gray-300 p-2 rounded"
-                      rows="3"
+                      onChange={e => setCustomInstructions(e.target.value)}
+                      placeholder="Any special requirements or patterns"
                     />
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Column Settings Card */}
+            {/* Column Settings */}
             {columns.length > 0 && (
-              <Card>
+              <Card className="bg-white">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Settings className="h-5 w-5" />
-                    <span>Column Settings</span>
+                  <CardTitle className="flex items-center space-x-2">
+                    <Settings className="h-5 w-5" /> <span>Column Settings</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6 max-h-96 overflow-y-auto">
-                  {columns.map((col, idx) => (
-                    <div
-                      key={idx}
-                      className="border border-gray-200 p-4 rounded-lg space-y-4"
-                    >
-                      <div className="flex justify-between items-center">
-                        <h4 className="font-medium">{col.name}</h4>
-                        <button
-                          onClick={() => removeColumn(idx)}
-                          className="text-red-600 hover:text-red-800"
+                  {columns.map((column, index) => (
+                    <div key={index} className="border-1 border-gray-300 rounded-lg p-4 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="inline-flex items-center px-3 py-1 rounded-full bg-purple-200 border border-gray-300 text-sm font-medium text-gray-800">
+                          {column.name}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeColumn(index)}
+                          className="border-1 border-gray-300"
                         >
-                          <Trash2 className="h-5 w-5" />
-                        </button>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
-
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {/* Data Type */}
                         <div>
                           <Label>Data Type</Label>
-                          <select
-                            value={col.type}
-                            onChange={(e) =>
-                              updateColumn(idx, { type: e.target.value })
-                            }
-                            className="w-full border border-gray-300 p-2 rounded"
+                          <Select
+                            value={column.type}
+                            onValueChange={v => updateColumn(index, { type: v })}
                           >
-                            <option value="string">Text</option>
-                            <option value="number">Number</option>
-                            <option value="email">Email</option>
-                            <option value="date">Date</option>
-                            <option value="boolean">Boolean</option>
-                          </select>
+                            <SelectTrigger className="mt-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="string">Text</SelectItem>
+                              <SelectItem value="number">Number</SelectItem>
+                              <SelectItem value="email">Email</SelectItem>
+                              <SelectItem value="date">Date</SelectItem>
+                              <SelectItem value="boolean">Boolean</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
-
-                        {/* Number‐specific settings */}
-                        {col.type === "number" && (
+                        {column.type === 'number' && (
                           <>
                             <div>
                               <Label>Number Type</Label>
-                              <select
-                                value={col.numberType}
-                                onChange={(e) =>
-                                  updateColumn(idx, {
-                                    numberType: e.target.value,
-                                  })
-                                }
-                                className="w-full border border-gray-300 p-2 rounded"
+                              <Select
+                                value={column.numberType || 'integers'}
+                                onValueChange={v => updateColumn(index, { numberType: v })}
                               >
-                                <option value="integers">Integers Only</option>
-                                <option value="decimals">Decimals Only</option>
-                                <option value="mixed">Mixed</option>
-                              </select>
+                                <SelectTrigger className="mt-1">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="integers">Integers Only</SelectItem>
+                                  <SelectItem value="decimals">Decimals Only</SelectItem>
+                                  <SelectItem value="mixed">Mixed</SelectItem>
+                                </SelectContent>
+                              </Select>
                             </div>
                             <div>
                               <Label>Min Value</Label>
-                              <input
+                              <Input
                                 type="number"
-                                value={col.minValue}
-                                onChange={(e) =>
-                                  updateColumn(idx, {
-                                    minValue: parseInt(e.target.value) || 0,
-                                  })
-                                }
-                                className="w-full border border-gray-300 p-2 rounded"
+                                value={column.minValue || 0}
+                                onChange={e => updateColumn(index, { minValue: parseInt(e.target.value) })}
+                                className="mt-1 border-1 border-gray-300"
                               />
                             </div>
                             <div>
                               <Label>Max Value</Label>
-                              <input
+                              <Input
                                 type="number"
-                                value={col.maxValue}
-                                onChange={(e) =>
-                                  updateColumn(idx, {
-                                    maxValue: parseInt(e.target.value) || 0,
-                                  })
-                                }
-                                className="w-full border border-gray-300 p-2 rounded"
+                                value={column.maxValue || 100}
+                                onChange={e => updateColumn(index, { maxValue: parseInt(e.target.value) })}
+                                className="mt-1 border-1 border-gray-300"
                               />
                             </div>
                           </>
                         )}
                       </div>
-
-                      {/* Missing Values Slider */}
                       <div>
-                        <Label>
-                          Missing Values: {col.nanPercentage}%
-                        </Label>
+                        <Label>Missing Values: {column.nanPercentage}%</Label>
                         <Slider
-                          value={[col.nanPercentage]}
-                          onValueChange={(valArr) =>
-                            updateColumn(idx, {
-                              nanPercentage: valArr[0],
-                            })
-                          }
-                          min={0}
+                          value={[column.nanPercentage]}
+                          onValueChange={v => updateColumn(index, { nanPercentage: v[0] })}
                           max={50}
                           step={1}
                           className="mt-2"
                         />
                       </div>
-
-                      {/* Add Noise Switch */}
                       <div className="flex items-center justify-between">
                         <Label>Add Noise</Label>
                         <Switch
-                          checked={col.addNoise}
-                          onCheckedChange={(checked) =>
-                            updateColumn(idx, { addNoise: checked })
-                          }
-                          // <-- No extra className here,
-                          //     so it will use its default colors:
-                          //     data-[state=checked]:bg-primary, data-[state=unchecked]:bg-input
+                          checked={column.addNoise}
+                          onCheckedChange={c => updateColumn(index, { addNoise: c })}
                         />
                       </div>
-
-                      {/* Noise Level Slider (only if Add Noise is ON) */}
-                      {col.addNoise && (
+                      {column.addNoise && (
                         <div>
-                          <Label>Noise Level: {col.noiseLevel}%</Label>
+                          <Label>Noise Level: {column.noiseLevel}%</Label>
                           <Slider
-                            value={[col.noiseLevel]}
-                            onValueChange={(valArr) =>
-                              updateColumn(idx, {
-                                noiseLevel: valArr[0],
-                              })
-                            }
-                            min={0}
+                            value={[column.noiseLevel]}
+                            onValueChange={v => updateColumn(index, { noiseLevel: v[0] })}
                             max={20}
                             step={1}
                             className="mt-2"
                           />
                         </div>
                       )}
-
-                      {/* Add Outliers Switch */}
-                      <div className="flex items-center justify-between">
-                        <Label>Add Outliers</Label>
-                        <Switch
-                          checked={col.addOutliers}
-                          onCheckedChange={(checked) =>
-                            updateColumn(idx, { addOutliers: checked })
-                          }
-                        />
-                      </div>
-
-                      {/* Outlier Percentage Slider (only if Add Outliers is ON) */}
-                      {col.addOutliers && (
-                        <div>
-                          <Label>
-                            Outlier Percentage: {col.outlierPercentage}%
-                          </Label>
-                          <Slider
-                            value={[col.outlierPercentage]}
-                            onValueChange={(valArr) =>
-                              updateColumn(idx, {
-                                outlierPercentage: valArr[0],
-                              })
-                            }
-                            min={0}
-                            max={20}
-                            step={1}
-                            className="mt-2"
-                          />
-                        </div>
+                      {column.type === 'number' && (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <Label>Add Outliers</Label>
+                            <Switch
+                              checked={column.addOutliers}
+                              onCheckedChange={c => updateColumn(index, { addOutliers: c })}
+                            />
+                          </div>
+                          {column.addOutliers && (
+                            <div>
+                              <Label>Outlier Percentage: {column.outlierPercentage}%</Label>
+                              <Slider
+                                value={[column.outlierPercentage]}
+                                onValueChange={v => updateColumn(index, { outlierPercentage: v[0] })}
+                                max={20}
+                                step={1}
+                                className="mt-2"
+                              />
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   ))}
@@ -727,42 +464,35 @@ const Generate = () => {
               </Card>
             )}
 
-            {/* Generate & Download Controls */}
+            {/* Generate & Download */}
             <Card>
               <CardContent className="pt-6">
-                <button
+                <Button
                   onClick={generateData}
-                  disabled={isGenerating || columns.length === 0}
-                  className="w-full h-11 rounded-md px-8 text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                  disabled={isGenerating}
+                  size="lg"
+                  className="w-full text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
                 >
-                  {isGenerating ? "Generating..." : "Generate Data"}
-                </button>
+                  {isGenerating ? 'Generating...' : 'Generate Data'}
+                </Button>
 
                 {generatedData.length > 0 && (
                   <div className="mt-4 space-y-2">
                     <Label>Download Options</Label>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => downloadData("csv")}
-                        className="flex-1 flex items-center justify-center gap-2 border border-gray-300 py-2 rounded hover:bg-gray-100"
-                      >
-                        <Download className="h-5 w-5" />
-                        CSV
-                      </button>
-                      <button
-                        onClick={() => downloadData("json")}
-                        className="flex-1 flex items-center justify-center gap-2 border border-gray-300 py-2 rounded hover:bg-gray-100"
-                      >
-                        <FileText className="h-5 w-5" />
-                        JSON
-                      </button>
-                      <button
-                        onClick={() => downloadData("txt")}
-                        className="flex-1 flex items-center justify-center gap-2 border border-gray-300 py-2 rounded hover:bg-gray-100"
-                      >
-                        <FileText className="h-5 w-5" />
-                        TXT
-                      </button>
+                    <div className="flex flex-wrap gap-2">
+                      {['csv', 'json', 'txt'].map(fmt => (
+                        <Button
+                          key={fmt}
+                          variant="outline"
+                          onClick={() => downloadData(fmt)}
+                          className="flex-1 min-w-0"
+                        >
+                          {fmt === 'csv'
+                            ? <Download className="h-4 w-4 mr-2" />
+                            : <FileText className="h-4 w-4 mr-2" />}
+                          {fmt.toUpperCase()}
+                        </Button>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -770,45 +500,38 @@ const Generate = () => {
             </Card>
           </div>
 
-          {/* Right Column: Data Preview */}
-          <Card>
+          {/* Preview Panel */}
+          <Card className="bg-white">
             <CardHeader>
               <CardTitle>Generated Data Preview</CardTitle>
             </CardHeader>
             <CardContent>
-              {generatedData.length === 0 ? (
-                <div className="text-center py-12 text-gray-500 flex flex-col items-center">
-                  <Database className="h-12 w-12 mb-4 opacity-50" />
-                  <p>No data generated yet. Configure columns and click “Generate Data.”</p>
+              {!generatedData.length ? (
+                <div className="text-center py-12 text-gray-500">
+                  <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No data generated yet. Configure your columns and click "Generate Data".</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full border-collapse border border-gray-300 text-sm">
                     <thead>
                       <tr className="bg-gray-50">
-                        {columns.map((col, i) => (
-                          <th
-                            key={i}
-                            className="border border-gray-300 p-2 text-left font-semibold"
-                          >
-                            {col.name}
+                        {/* Ensure columns are defined or infer from data if empty */}
+                        {(columns.length > 0 ? columns : Object.keys(generatedData[0] || {}).map(name => ({name}))).map((c, i) => (
+                          <th key={i} className="border border-gray-300 p-2 text-left font-semibold">
+                            {c.name}
                           </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {generatedData.slice(0, 20).map((row, rowIndex) => (
-                        <tr key={rowIndex} className="hover:bg-gray-50">
-                          {columns.map((col, colIndex) => (
-                            <td
-                              key={colIndex}
-                              className="border border-gray-300 p-2"
-                            >
-                              {row[col.name] === null ? (
-                                <span className="text-gray-400 italic">null</span>
-                              ) : (
-                                String(row[col.name])
-                              )}
+                      {generatedData.slice(0, 20).map((row, r) => (
+                        <tr key={r} className="hover:bg-gray-50">
+                          {/* Use column names from the `columns` state for consistent ordering,
+                              or fall back to keys from the first row if `columns` is empty (e.g., from template) */}
+                          {(columns.length > 0 ? columns : Object.keys(generatedData[0] || {}).map(name => ({name}))).map((c, j) => (
+                            <td key={j} className="border border-gray-300 p-2">
+                              {row[c.name] == null ? <span className="text-gray-400 italic">null</span> : String(row[c.name])}
                             </td>
                           ))}
                         </tr>
@@ -817,7 +540,7 @@ const Generate = () => {
                   </table>
                   {generatedData.length > 20 && (
                     <p className="text-center text-gray-500 mt-4">
-                      Showing first 20 rows of {generatedData.length} total rows
+                      Showing first 20 of {generatedData.length} rows
                     </p>
                   )}
                 </div>
