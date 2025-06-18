@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { gsap } from 'gsap';
 import { Download, FileText, Database, Settings, Wand2, Plus, Trash2 } from 'lucide-react';
 import { Button } from '../components/UI/Button';
 import { Input } from '../components/UI/Input';
@@ -22,13 +23,30 @@ const Generate = () => {
   const [activeTab, setActiveTab] = useState('manual');
   const [distributionType, setDistributionType] = useState('balanced');
 
+  const tableRef = useRef(null);
+  const previewRef = useRef(null);
+  const [visibleRows, setVisibleRows] = useState(20); // default value
+
+  // Animation to show the table
+  useEffect(() => {
+    if (!isGenerating && generatedData.length && tableRef.current) {
+      gsap.to(tableRef.current, {
+        duration: 0.8,
+        opacity: 1,
+        ease: 'power2.out',
+      });
+    }
+  }, [isGenerating, generatedData]);
+
+  // Templates
   const datasetTemplates = [
-    { value: 'ecommerce', label: 'E-commerce Customer Data', description: 'Customer profiles with purchase history, preferences, and demographics' },
-    { value: 'financial', label: 'Financial Records', description: 'Transaction data, account balances, and financial metrics' },
-    { value: 'healthcare', label: 'Healthcare Data', description: 'Patient records, medical metrics, and treatment information' },
-    { value: 'education', label: 'Educational Data', description: 'Student records, grades, courses, and academic performance' },
-    { value: 'marketing', label: 'Marketing Analytics', description: 'Campaign performance, user engagement, and conversion metrics' },
-    { value: 'iot', label: 'IoT Sensor Data', description: 'Time-series data from various sensors and devices' }
+    { value: 'ecommerce', label: 'E-commerce Data', description: 'Orders, products, and customer behavior' },
+    { value: 'healthcare', label: 'Healthcare Records', description: 'Patient visits, vitals, and treatment plans' },
+    { value: 'financial', label: 'Financial Transactions', description: 'Bank activity, merchants, and fraud flags' },
+    { value: 'school', label: 'Student Performance', description: 'Grades, attendance, and course records' },
+    { value: 'sports', label: 'Athlete Stats', description: 'Match performance, cards, goals, and injuries' },
+    { value: 'videogames', label: 'Game Analytics', description: 'Session metrics, levels, purchases, and rewards' },
+    { value: 'marketing', label: 'Marketing Analytics', description: 'Campaign performance, user engagement, and conversion metrics' }
   ];
 
   const addColumn = () => {
@@ -65,40 +83,59 @@ const Generate = () => {
   const generateFromTemplate = () => {
     const templates = {
       ecommerce: [
+        { name: 'OrderID', type: 'string' },
         { name: 'CustomerID', type: 'string' },
-        { name: 'Age', type: 'number', numberType: 'integers', minValue: 18, maxValue: 80 },
-        { name: 'Gender', type: 'string' },
-        { name: 'City', type: 'string' },
-        { name: 'TotalSpend', type: 'number', numberType: 'decimals', minValue: 10, maxValue: 1000 },
-        { name: 'LastPurchaseDate', type: 'date' },
-        { name: 'IsPrimeMember', type: 'boolean' }
+        { name: 'CustomerName', type: 'string' },
+        { name: 'Email', type: 'email' },
+        { name: 'OrderDate', type: 'date' },
+        { name: 'ProductID', type: 'string' },
+        { name: 'ProductName', type: 'string' },
+        { name: 'Category', type: 'string' },
+        { name: 'Quantity', type: 'number', numberType: 'integers', minValue: 1, maxValue: 5 },
+        { name: 'UnitPrice', type: 'number', numberType: 'decimals', minValue: 5, maxValue: 500 },
+        { name: 'TotalAmount', type: 'number', numberType: 'decimals', minValue: 10, maxValue: 2500 },
+        { name: 'PaymentMethod', type: 'string' },
+        { name: 'DeliveryStatus', type: 'string' },
+        { name: 'IsFirstPurchase', type: 'boolean' }
       ],
       financial: [
         { name: 'TransactionID', type: 'string' },
         { name: 'AccountID', type: 'string' },
-        { name: 'Amount', type: 'number', numberType: 'decimals', minValue: -5000, maxValue: 5000 },
-        { name: 'TransactionType', type: 'string' },
+        { name: 'AccountType', type: 'string' },
         { name: 'TransactionDate', type: 'date' },
+        { name: 'Amount', type: 'number', numberType: 'decimals', minValue: -10000, maxValue: 10000 },
+        { name: 'Currency', type: 'string' },
+        { name: 'MerchantName', type: 'string' },
+        { name: 'Category', type: 'string' },
         { name: 'BalanceAfterTransaction', type: 'number', numberType: 'decimals', minValue: 0, maxValue: 100000 },
-        { name: 'IsFraud', type: 'boolean' }
+        { name: 'IsInternational', type: 'boolean' },
+        { name: 'IsFraudulent', type: 'boolean' }
       ],
       healthcare: [
         { name: 'PatientID', type: 'string' },
+        { name: 'FullName', type: 'string' },
         { name: 'Age', type: 'number', numberType: 'integers', minValue: 0, maxValue: 100 },
+        { name: 'Gender', type: 'string' },
+        { name: 'VisitDate', type: 'date' },
         { name: 'Diagnosis', type: 'string' },
-        { name: 'BloodPressure_Systolic', type: 'number', numberType: 'integers', minValue: 90, maxValue: 180 },
-        { name: 'BloodPressure_Diastolic', type: 'number', numberType: 'integers', minValue: 60, maxValue: 120 },
+        { name: 'TreatmentPlan', type: 'string' },
         { name: 'Medication', type: 'string' },
-        { name: 'AdmissionDate', type: 'date' },
-        { name: 'DischargeDate', type: 'date' }
+        { name: 'BloodPressure', type: 'string' },
+        { name: 'HeartRate', type: 'number', numberType: 'integers', minValue: 50, maxValue: 180 },
+        { name: 'CholesterolLevel', type: 'number', numberType: 'decimals', minValue: 3.0, maxValue: 7.0 },
+        { name: 'FollowUpRequired', type: 'boolean' }
       ],
-      education: [
+      school: [
         { name: 'StudentID', type: 'string' },
+        { name: 'FullName', type: 'string' },
         { name: 'GradeLevel', type: 'number', numberType: 'integers', minValue: 1, maxValue: 12 },
-        { name: 'Major', type: 'string' },
-        { name: 'GPA', type: 'number', numberType: 'decimals', minValue: 1.0, maxValue: 4.0 },
+        { name: 'Gender', type: 'string' },
         { name: 'EnrollmentDate', type: 'date' },
-        { name: 'CourseCount', type: 'number', numberType: 'integers', minValue: 1, maxValue: 7 },
+        { name: 'CourseName', type: 'string' },
+        { name: 'AssignmentScore', type: 'number', numberType: 'decimals', minValue: 0, maxValue: 100 },
+        { name: 'ExamScore', type: 'number', numberType: 'decimals', minValue: 0, maxValue: 100 },
+        { name: 'FinalGrade', type: 'string' },
+        { name: 'AttendanceRate', type: 'number', numberType: 'decimals', minValue: 50, maxValue: 100 },
         { name: 'ScholarshipRecipient', type: 'boolean' }
       ],
       marketing: [
@@ -110,14 +147,32 @@ const Generate = () => {
         { name: 'AdSpend', type: 'number', numberType: 'decimals', minValue: 5, maxValue: 500 },
         { name: 'Date', type: 'date' }
       ],
-      iot: [
-        { name: 'DeviceID', type: 'string' },
-        { name: 'Timestamp', type: 'date' },
-        { name: 'TemperatureCelsius', type: 'number', numberType: 'decimals', minValue: -20, maxValue: 50 },
-        { name: 'Humidity', type: 'number', numberType: 'decimals', minValue: 0, maxValue: 100 },
-        { name: 'PressureKPa', type: 'number', numberType: 'decimals', minValue: 90, maxValue: 110 },
-        { name: 'BatteryLevel', type: 'number', numberType: 'integers', minValue: 0, maxValue: 100 },
-        { name: 'IsOnline', type: 'boolean' }
+      sports: [
+        { name: 'PlayerID', type: 'string' },
+        { name: 'FullName', type: 'string' },
+        { name: 'TeamName', type: 'string' },
+        { name: 'Sport', type: 'string' },
+        { name: 'MatchDate', type: 'date' },
+        { name: 'Position', type: 'string' },
+        { name: 'MinutesPlayed', type: 'number', numberType: 'integers', minValue: 0, maxValue: 120 },
+        { name: 'GoalsScored', type: 'number', numberType: 'integers', minValue: 0, maxValue: 5 },
+        { name: 'Assists', type: 'number', numberType: 'integers', minValue: 0, maxValue: 5 },
+        { name: 'YellowCards', type: 'number', numberType: 'integers', minValue: 0, maxValue: 2 },
+        { name: 'RedCard', type: 'boolean' },
+        { name: 'Injury', type: 'boolean' }
+      ],
+      videogames: [
+        { name: 'PlayerID', type: 'string' },
+        { name: 'Username', type: 'string' },
+        { name: 'GameTitle', type: 'string' },
+        { name: 'SessionStart', type: 'date' },
+        { name: 'SessionEnd', type: 'date' },
+        { name: 'SessionDurationMinutes', type: 'number', numberType: 'integers', minValue: 5, maxValue: 300 },
+        { name: 'LevelAchieved', type: 'number', numberType: 'integers', minValue: 1, maxValue: 100 },
+        { name: 'InGameCurrencyEarned', type: 'number', numberType: 'decimals', minValue: 0, maxValue: 5000 },
+        { name: 'ItemsPurchased', type: 'number', numberType: 'integers', minValue: 0, maxValue: 50 },
+        { name: 'UsedMicrotransactions', type: 'boolean' },
+        { name: 'IsPremiumUser', type: 'boolean' }
       ]
     };
     if (selectedTemplate && templates[selectedTemplate]) {
@@ -135,7 +190,7 @@ const Generate = () => {
 
     const configPayload = { rowCount, distributionType, customInstructions, template: selectedTemplate, columns };
     try {
-      const resp = await fetch('http://localhost:5000/api/generate', {
+      const resp = await fetch('https://dlepighe1.pythonanywhere.com/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(configPayload)
@@ -506,45 +561,53 @@ const Generate = () => {
               <CardTitle>Generated Data Preview</CardTitle>
             </CardHeader>
             <CardContent>
-              {!generatedData.length ? (
-                <div className="text-center py-12 text-gray-500">
-                  <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No data generated yet. Configure your columns and click "Generate Data".</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse border border-gray-300 text-sm">
-                    <thead>
-                      <tr className="bg-gray-50">
-                        {/* Ensure columns are defined or infer from data if empty */}
-                        {(columns.length > 0 ? columns : Object.keys(generatedData[0] || {}).map(name => ({name}))).map((c, i) => (
-                          <th key={i} className="border border-gray-300 p-2 text-left font-semibold">
-                            {c.name}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {generatedData.slice(0, 20).map((row, r) => (
-                        <tr key={r} className="hover:bg-gray-50">
-                          {/* Use column names from the `columns` state for consistent ordering,
-                              or fall back to keys from the first row if `columns` is empty (e.g., from template) */}
-                          {(columns.length > 0 ? columns : Object.keys(generatedData[0] || {}).map(name => ({name}))).map((c, j) => (
-                            <td key={j} className="border border-gray-300 p-2">
-                              {row[c.name] == null ? <span className="text-gray-400 italic">null</span> : String(row[c.name])}
-                            </td>
+              <div ref={previewRef}>
+                {isGenerating ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-gray-500 space-y-4">
+                    <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-purple-500" />
+                    <p className="text-lg font-medium">Now, generating...</p>
+                  </div>
+                ) : !generatedData.length ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No data generated yet. Configure your columns and click "Generate Data".</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto opacity-0" ref={tableRef}>
+                    <table className="w-full border-collapse border border-gray-300 text-sm">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          {(columns.length > 0 ? columns : Object.keys(generatedData[0] || {}).map(name => ({ name }))).map((c, i) => (
+                            <th key={i} className="border border-gray-300 p-2 text-left font-semibold">
+                              {c.name}
+                            </th>
                           ))}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {generatedData.length > 20 && (
-                    <p className="text-center text-gray-500 mt-4">
-                      Showing first 20 of {generatedData.length} rows
-                    </p>
-                  )}
-                </div>
-              )}
+                      </thead>
+                      <tbody>
+                        {generatedData.slice(0, 25).map((row, r) => (
+                          <tr key={r} className="hover:bg-gray-50">
+                            {(columns.length > 0 ? columns : Object.keys(generatedData[0] || {}).map(name => ({ name }))).map((c, j) => (
+                              <td key={j} className="border border-gray-300 p-2">
+                                {row[c.name] == null ? (
+                                  <span className="text-gray-400 italic">null</span>
+                                ) : (
+                                  String(row[c.name])
+                                )}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {generatedData.length > 20 && (
+                      <p className="text-center text-gray-500 mt-4">
+                        Showing first 25 of {generatedData.length} rows
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>
