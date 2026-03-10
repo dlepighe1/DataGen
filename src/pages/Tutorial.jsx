@@ -73,72 +73,78 @@ const Tutorial = () => {
 
   return (
     // Outer container
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4">
+    <div className="min-h-[calc(100vh-64px)] p-4 relative z-10 text-slate-200">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
+          <h1 className="text-4xl font-bold text-gradient mb-4">
             How to Use DataGen AI
           </h1>
-          <p className="text-xl text-gray-600">
+          <p className="text-xl text-slate-400">
             Follow these quick steps to craft realistic, custom datasets
           </p>
         </div>
 
         {/* Steps */}
-        <div className="space-y-8">
+        <div className="space-y-6">
           {steps.map((step, index) => (
-            <Card key={index} className="hover:shadow-lg transition-shadow duration-300">
+            <Card key={index} className="glass-panel border-none shadow-none text-slate-200 transition-all duration-300 hover:-translate-y-1">
               <CardHeader>
-                <CardTitle className="flex items-center space-x-4">
+                <CardTitle className="flex items-center space-x-5">
                   {/* Number badge */}
-                  <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg">
+                  <div className="shrink-0 rounded-full flex items-center justify-center font-bold text-lg w-12 h-12 shadow-lg"
+                    style={{ background: 'linear-gradient(135deg, #0ea5e9, #6366f1)', color: 'white' }}>
                     {index + 1}
                   </div>
                   {/* Title & icon */}
-                  <div className="flex items-center space-x-3">
-                    <step.icon className="h-6 w-6 text-blue-600" />
-                    <span>{step.title}</span>
+                  <div className="flex items-center space-x-3 text-white">
+                    <step.icon className="h-6 w-6 text-sky-400" />
+                    <span className="text-xl">{step.title}</span>
                   </div>
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="text-gray-600 mb-3 text-lg">{step.description}</p>
-                <p className="text-gray-500 text-sm">{step.details}</p>
+              <CardContent className="pl-[5.25rem]">
+                <p className="text-slate-300 mb-2 text-[17px] leading-relaxed">{step.description}</p>
+                <p className="text-slate-500 text-[15px]">{step.details}</p>
               </CardContent>
             </Card>
           ))}
         </div>
 
         {/* Pro Tips */}
-        <div className="mt-12 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl p-8 text-center">
-          <h2 className="text-2xl font-bold mb-4">Pro Tips</h2>
-          <div className="grid md:grid-cols-2 gap-6 text-left">
+        <div className="mt-12 glass-panel rounded-2xl p-8 md:p-10 text-center relative overflow-hidden">
+          {/* Subtle gradient overlay */}
+          <div className="absolute inset-0 bg-gradient-to-r from-sky-500/10 to-indigo-500/10 pointer-events-none" />
+          
+          <h2 className="text-2xl font-bold mb-8 text-white relative z-10 flex items-center justify-center gap-2">
+            <Wand2 className="h-6 w-6 text-sky-400" /> Pro Tips
+          </h2>
+          <div className="grid md:grid-cols-2 gap-8 text-left relative z-10">
             {/* Tip 1 */}
             <div>
-              <h3 className="font-semibold mb-2">Template Quick‑Start</h3>
-              <p className="text-sm opacity-90">
+              <h3 className="font-semibold mb-2 text-sky-300 text-lg">Template Quick‑Start</h3>
+              <p className="text-[15px] text-slate-400 leading-relaxed max-w-sm">
                 Not sure where to begin? Load a template and tweak it instead of building a schema from scratch.
               </p>
             </div>
             {/* Tip 2 */}
             <div>
-              <h3 className="font-semibold mb-2">Column Fine‑Tuning</h3>
-              <p className="text-sm opacity-90">
+              <h3 className="font-semibold mb-2 text-indigo-300 text-lg">Column Fine‑Tuning</h3>
+              <p className="text-[15px] text-slate-400 leading-relaxed max-w-sm">
                 Use sliders to inject missing values, noise or outliers — perfect for testing data‑cleaning pipelines.
               </p>
             </div>
             {/* Tip 3 */}
             <div>
-              <h3 className="font-semibold mb-2">Row Limits</h3>
-              <p className="text-sm opacity-90">
+              <h3 className="font-semibold mb-2 text-purple-300 text-lg">Row Limits</h3>
+              <p className="text-[15px] text-slate-400 leading-relaxed max-w-sm">
                 Generate up to 10 000 rows in one go. Need more? Run multiple batches and merge them.
               </p>
             </div>
             {/* Tip 4 */}
             <div>
-              <h3 className="font-semibold mb-2">Distribution Strategy</h3>
-              <p className="text-sm opacity-90">
+              <h3 className="font-semibold mb-2 text-teal-300 text-lg">Distribution Strategy</h3>
+              <p className="text-[15px] text-slate-400 leading-relaxed max-w-sm">
                 Switch to ‘Distorted’ to simulate dirty, real‑world data and stress‑test your ML workflows.
               </p>
             </div>

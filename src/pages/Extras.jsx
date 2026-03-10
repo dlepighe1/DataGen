@@ -49,39 +49,39 @@ const Extras = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4">
-      <div className="max-w-6xl mx-auto bg-background">
+    <div className="min-h-[calc(100vh-64px)] p-4 relative z-10 text-slate-200">
+      <div className="max-w-6xl mx-auto">
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
+          <h1 className="text-4xl font-bold text-gradient mb-4">
             Dataset Resources
           </h1>
-          <p className="text-xl text-gray-600">
+          <p className="text-xl text-slate-400">
             Explore these popular platforms for finding existing datasets
           </p>
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {datasets.map((dataset, index) => (
-            <Card key={index} className="hover:shadow-lg transition-all duration-300 hover:scale-105">
+            <Card key={index} className="glass-panel border-none shadow-none text-slate-200 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-sky-900/20">
               <CardHeader>
                 <div className="flex items-center justify-between mb-2">
-                  <CardTitle className="text-lg">{dataset.name}</CardTitle>
-                  <Database className="h-5 w-5 text-blue-600" />
+                  <CardTitle className="text-lg text-white font-semibold">{dataset.name}</CardTitle>
+                  <Database className="h-5 w-5 text-sky-400" />
                 </div>
-                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                <span className="text-xs bg-sky-900/40 text-sky-300 border border-sky-500/30 px-2.5 py-1 rounded-full w-fit">
                   {dataset.category}
                 </span>
               </CardHeader>
-              <CardContent>
-                <p className="text-gray-600 mb-4">{dataset.description}</p>
+              <CardContent className="flex flex-col h-[calc(100%-80px)]">
+                <p className="text-slate-400 mb-6 flex-grow">{dataset.description}</p>
                 
-                <div className="mb-4">
-                  <h4 className="font-semibold text-sm mb-2">Key Features:</h4>
-                  <ul className="text-sm text-gray-600 space-y-1">
+                <div className="mb-6">
+                  <h4 className="font-semibold text-sm mb-3 text-slate-300">Key Features:</h4>
+                  <ul className="text-[13px] text-slate-400 space-y-2">
                     {dataset.features.map((feature, idx) => (
-                      <li key={idx} className="flex items-center">
-                        <Search className="h-3 w-3 mr-2 text-green-500" />
-                        {feature}
+                      <li key={idx} className="flex items-start">
+                        <Search className="h-3.5 w-3.5 mr-2 text-teal-400 mt-0.5 shrink-0" />
+                        <span>{feature}</span>
                       </li>
                     ))}
                   </ul>
@@ -91,7 +91,7 @@ const Extras = () => {
                   href={dataset.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:from-blue-700 hover:to-purple-700 transition-all duration-200"
+                  className="inline-flex items-center justify-center space-x-2 bg-gradient-to-r from-sky-500 to-indigo-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:from-sky-400 hover:to-indigo-400 transition-all duration-200 shadow-lg mt-auto w-full"
                 >
                   <span>Visit Website</span>
                   <ArrowDown className="h-4 w-4 rotate-[-45deg]" />
@@ -101,50 +101,59 @@ const Extras = () => {
           ))}
         </div>
 
-        <div className="mt-12 bg-white rounded-xl p-8 shadow-lg">
-          <h2 className="text-2xl font-bold text-center mb-6">When to Use External Datasets vs. DataGen AI</h2>
+        <div className="mt-12 glass-panel rounded-2xl p-8 lg:p-12 shadow-2xl relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-r from-teal-500/5 to-sky-500/5 pointer-events-none" />
+          <h2 className="text-2xl lg:text-3xl font-bold text-center mb-10 text-white relative z-10">
+            When to Use External Datasets vs. DataGen AI
+          </h2>
           
-          <div className="grid md:grid-cols-2 gap-8">
-            <div className="space-y-4">
-              <h3 className="text-xl font-semibold text-green-600">Use External Datasets When:</h3>
-              <ul className="space-y-2 text-gray-600">
+          <div className="grid md:grid-cols-2 gap-12 relative z-10">
+            <div className="space-y-6">
+              <h3 className="text-xl font-semibold text-teal-400 flex items-center gap-2 pb-2 border-b border-teal-500/20">
+                <Search className="h-5 w-5" />
+                Use External Datasets When:
+              </h3>
+              <ul className="space-y-3 text-slate-300">
                 <li className="flex items-start">
-                  <Search className="h-4 w-4 mr-2 text-green-500 mt-1 flex-shrink-0" />
-                  You need real-world data with authentic patterns and distributions
+                  <div className="bg-teal-500/20 p-1 rounded mt-0.5 mr-3 shrink-0"><Search className="h-3.5 w-3.5 text-teal-400" /></div>
+                  <span className="leading-relaxed">You need real-world data with authentic patterns and distributions</span>
                 </li>
                 <li className="flex items-start">
-                  <Search className="h-4 w-4 mr-2 text-green-500 mt-1 flex-shrink-0" />
-                  Your research requires established benchmarks for comparison
+                  <div className="bg-teal-500/20 p-1 rounded mt-0.5 mr-3 shrink-0"><Search className="h-3.5 w-3.5 text-teal-400" /></div>
+                  <span className="leading-relaxed">Your research requires established benchmarks for comparison</span>
                 </li>
                 <li className="flex items-start">
-                  <Search className="h-4 w-4 mr-2 text-green-500 mt-1 flex-shrink-0" />
-                  You're working on domain-specific problems with existing datasets
+                  <div className="bg-teal-500/20 p-1 rounded mt-0.5 mr-3 shrink-0"><Search className="h-3.5 w-3.5 text-teal-400" /></div>
+                  <span className="leading-relaxed">You're working on domain-specific problems with existing datasets</span>
                 </li>
                 <li className="flex items-start">
-                  <Search className="h-4 w-4 mr-2 text-green-500 mt-1 flex-shrink-0" />
-                  Large-scale datasets are required for deep learning models
+                  <div className="bg-teal-500/20 p-1 rounded mt-0.5 mr-3 shrink-0"><Search className="h-3.5 w-3.5 text-teal-400" /></div>
+                  <span className="leading-relaxed">Large-scale datasets are required for deep learning models</span>
                 </li>
               </ul>
             </div>
 
-            <div className="space-y-4">
-              <h3 className="text-xl font-semibold text-blue-600">Use DataGen AI When:</h3>
-              <ul className="space-y-2 text-gray-600">
+            <div className="space-y-6">
+              <h3 className="text-xl font-semibold text-sky-400 flex items-center gap-2 pb-2 border-b border-sky-500/20">
+                <Database className="h-5 w-5" />
+                Use DataGen AI When:
+              </h3>
+              <ul className="space-y-3 text-slate-300">
                 <li className="flex items-start">
-                  <Database className="h-4 w-4 mr-2 text-blue-500 mt-1 flex-shrink-0" />
-                  You need custom datasets with specific column requirements
+                  <div className="bg-sky-500/20 p-1 rounded mt-0.5 mr-3 shrink-0"><Database className="h-3.5 w-3.5 text-sky-400" /></div>
+                  <span className="leading-relaxed">You need custom datasets with specific column requirements</span>
                 </li>
                 <li className="flex items-start">
-                  <Database className="h-4 w-4 mr-2 text-blue-500 mt-1 flex-shrink-0" />
-                  Privacy concerns prevent using real user data
+                  <div className="bg-sky-500/20 p-1 rounded mt-0.5 mr-3 shrink-0"><Database className="h-3.5 w-3.5 text-sky-400" /></div>
+                  <span className="leading-relaxed">Privacy concerns prevent using real user data</span>
                 </li>
                 <li className="flex items-start">
-                  <Database className="h-4 w-4 mr-2 text-blue-500 mt-1 flex-shrink-0" />
-                  You're prototyping and need quick test data generation
+                  <div className="bg-sky-500/20 p-1 rounded mt-0.5 mr-3 shrink-0"><Database className="h-3.5 w-3.5 text-sky-400" /></div>
+                  <span className="leading-relaxed">You're prototyping and need quick test data generation</span>
                 </li>
                 <li className="flex items-start">
-                  <Database className="h-4 w-4 mr-2 text-blue-500 mt-1 flex-shrink-0" />
-                  Educational purposes and learning data science concepts
+                  <div className="bg-sky-500/20 p-1 rounded mt-0.5 mr-3 shrink-0"><Database className="h-3.5 w-3.5 text-sky-400" /></div>
+                  <span className="leading-relaxed">Educational purposes and learning data science concepts</span>
                 </li>
               </ul>
             </div>

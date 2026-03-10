@@ -5,6 +5,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 // Import Navbar and Footer
 import Navbar from './components/NavBar';
 import Footer from './components/Footer';
+import HexagonBackground from './components/HexagonBackground';
 
 // Import each page
 import Home from './pages/Home';
@@ -16,6 +17,9 @@ import About from './pages/About';
 const App = () => {
   return (
     <BrowserRouter>
+      {/* Global Background */}
+      <HexagonBackground />
+
       {/* Navbar */}
       <Navbar />
 
