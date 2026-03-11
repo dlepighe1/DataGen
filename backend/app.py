@@ -4,7 +4,7 @@ import re
 from io import StringIO
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from together import Together
+from openai import OpenAI
 
 app = Flask(__name__)
 # Enable CORS for the frontend origin
@@ -17,11 +17,14 @@ def health_check():
 @app.route('/api/generate', methods=['POST'])
 def generate_table():
     # Fetch from environment variable for secure deployment
-    TOGETHER_API_KEY = os.environ.get("TOGETHER_API_KEY")
-    if not TOGETHER_API_KEY:
-        return jsonify({"error": "TOGETHER_API_KEY environment variable is missing on the server."}), 500
+    OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+    if not OPENROUTER_API_KEY:
+        return jsonify({"error": "OPENROUTER_API_KEY environment variable is missing on the server."}), 500
 
-    client = Together(api_key=TOGETHER_API_KEY)
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=OPENROUTER_API_KEY,
+    )
     
     # Use silent=True so it doesn't crash on bad Content-Type headers
     config_payload = request.get_json(silent=True) or {}
@@ -84,13 +87,12 @@ def generate_table():
 
     try:
         response = client.chat.completions.create(
-            model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
+            model="openai/gpt-oss-120b:free",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.7
         )
         csv_text = response.choices[0].message.content.strip()
     except Exception as e:
-        return jsonify({"error": "Together AI request failed", "details": str(e)}), 502
+        return jsonify({"error": "OpenRouter API request failed", "details": str(e)}), 502
 
     try:
         # Regex to extract text inside markdown code block if LLM ignores our "no markdown" rule
