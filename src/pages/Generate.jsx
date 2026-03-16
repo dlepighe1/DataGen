@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { gsap } from 'gsap';
-import { Download, FileText, Database, Settings, Wand2, Plus, Trash2 } from 'lucide-react';
+import { Download, FileText, Database, Settings, Wand2, Plus, Trash2, ChevronDown } from 'lucide-react';
 import { Button } from '../components/UI/Button';
 import { Input } from '../components/UI/Input';
-import { Label } from '../components/UI/Label';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/UI/Card';
 import { Textarea } from '../components/UI/Textarea';
 import { Slider } from '../components/UI/Slider';
@@ -11,6 +10,15 @@ import { Switch } from '../components/UI/Switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/UI/Select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/UI/Tabs';
 import { toast } from '../components/Use-toast';
+
+/* ── Small helper: section label ── */
+function SectionLabel({ children }) {
+  return (
+    <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-2 mt-0.5">
+      {children}
+    </p>
+  );
+}
 
 const Generate = () => {
   const [columns, setColumns] = useState([]);
@@ -25,52 +33,33 @@ const Generate = () => {
 
   const tableRef = useRef(null);
   const previewRef = useRef(null);
-  const [visibleRows, setVisibleRows] = useState(20); // default value
 
-  // Animation to show the table
   useEffect(() => {
     if (!isGenerating && generatedData.length && tableRef.current) {
-      gsap.to(tableRef.current, {
-        duration: 0.8,
-        opacity: 1,
-        ease: 'power2.out',
-      });
+      gsap.fromTo(tableRef.current,
+        { opacity: 0, y: 10 },
+        { opacity: 1, y: 0, duration: 0.5, ease: 'power2.out' }
+      );
     }
   }, [isGenerating, generatedData]);
 
-  // Templates
   const datasetTemplates = [
-    { value: 'ecommerce', label: 'E-commerce Data', description: 'Orders, products, and customer behavior' },
-    { value: 'healthcare', label: 'Healthcare Records', description: 'Patient visits, vitals, and treatment plans' },
-    { value: 'financial', label: 'Financial Transactions', description: 'Bank activity, merchants, and fraud flags' },
-    { value: 'school', label: 'Student Performance', description: 'Grades, attendance, and course records' },
-    { value: 'sports', label: 'Athlete Stats', description: 'Match performance, cards, goals, and injuries' },
-    { value: 'videogames', label: 'Game Analytics', description: 'Session metrics, levels, purchases, and rewards' },
-    { value: 'marketing', label: 'Marketing Analytics', description: 'Campaign performance, user engagement, and conversion metrics' }
+    { value: 'ecommerce',   label: 'E-commerce Data',         description: 'Orders, products, and customer behavior' },
+    { value: 'healthcare',  label: 'Healthcare Records',       description: 'Patient visits, vitals, and treatment plans' },
+    { value: 'financial',   label: 'Financial Transactions',   description: 'Bank activity, merchants, and fraud flags' },
+    { value: 'school',      label: 'Student Performance',      description: 'Grades, attendance, and course records' },
+    { value: 'sports',      label: 'Athlete Stats',            description: 'Match performance, cards, goals, and injuries' },
+    { value: 'videogames',  label: 'Game Analytics',           description: 'Session metrics, levels, purchases, and rewards' },
+    { value: 'marketing',   label: 'Marketing Analytics',      description: 'Campaign performance, user engagement, and conversions' },
   ];
 
   const addColumn = () => {
-    const names = newColumnName
-      .split(',')
-      .map(name => name.trim())
-      .filter(name => name.length > 0);
-    const uniqueNames = names.filter((name, index, self) => self.indexOf(name) === index);
-    const newColumns = uniqueNames
-      .filter(name => !columns.find(col => col.name === name))
-      .map(name => ({
-        name,
-        type: 'string',
-        nanPercentage: 0,
-        addNoise: false,
-        noiseLevel: 0,
-        addOutliers: false,
-        outlierPercentage: 0,
-        numberType: 'integers'
-      }));
-    if (newColumns.length) {
-      setColumns([...columns, ...newColumns]);
-      setNewColumnName('');
-    }
+    const names = newColumnName.split(',').map(n => n.trim()).filter(n => n.length > 0);
+    const unique = names.filter((n, i, self) => self.indexOf(n) === i);
+    const newCols = unique
+      .filter(n => !columns.find(c => c.name === n))
+      .map(n => ({ name: n, type: 'string', nanPercentage: 0, addNoise: false, noiseLevel: 0, addOutliers: false, outlierPercentage: 0, numberType: 'integers' }));
+    if (newCols.length) { setColumns([...columns, ...newCols]); setNewColumnName(''); }
   };
 
   const removeColumn = idx => setColumns(columns.filter((_, i) => i !== idx));
@@ -83,134 +72,131 @@ const Generate = () => {
   const generateFromTemplate = () => {
     const templates = {
       ecommerce: [
-        { name: 'OrderID', type: 'string' },
-        { name: 'CustomerID', type: 'string' },
-        { name: 'CustomerName', type: 'string' },
-        { name: 'Email', type: 'email' },
-        { name: 'OrderDate', type: 'date' },
-        { name: 'ProductID', type: 'string' },
-        { name: 'ProductName', type: 'string' },
-        { name: 'Category', type: 'string' },
-        { name: 'Quantity', type: 'number', numberType: 'integers', minValue: 1, maxValue: 5 },
-        { name: 'UnitPrice', type: 'number', numberType: 'decimals', minValue: 5, maxValue: 500 },
-        { name: 'TotalAmount', type: 'number', numberType: 'decimals', minValue: 10, maxValue: 2500 },
-        { name: 'PaymentMethod', type: 'string' },
+        { name: 'OrderID',        type: 'string' },
+        { name: 'CustomerID',     type: 'string' },
+        { name: 'CustomerName',   type: 'string' },
+        { name: 'Email',          type: 'email' },
+        { name: 'OrderDate',      type: 'date' },
+        { name: 'ProductID',      type: 'string' },
+        { name: 'ProductName',    type: 'string' },
+        { name: 'Category',       type: 'string' },
+        { name: 'Quantity',       type: 'number', numberType: 'integers', minValue: 1,  maxValue: 5    },
+        { name: 'UnitPrice',      type: 'number', numberType: 'decimals', minValue: 5,  maxValue: 500  },
+        { name: 'TotalAmount',    type: 'number', numberType: 'decimals', minValue: 10, maxValue: 2500 },
+        { name: 'PaymentMethod',  type: 'string' },
         { name: 'DeliveryStatus', type: 'string' },
-        { name: 'IsFirstPurchase', type: 'boolean' }
+        { name: 'IsFirstPurchase', type: 'boolean' },
       ],
       financial: [
-        { name: 'TransactionID', type: 'string' },
-        { name: 'AccountID', type: 'string' },
-        { name: 'AccountType', type: 'string' },
-        { name: 'TransactionDate', type: 'date' },
-        { name: 'Amount', type: 'number', numberType: 'decimals', minValue: -10000, maxValue: 10000 },
-        { name: 'Currency', type: 'string' },
-        { name: 'MerchantName', type: 'string' },
-        { name: 'Category', type: 'string' },
-        { name: 'BalanceAfterTransaction', type: 'number', numberType: 'decimals', minValue: 0, maxValue: 100000 },
-        { name: 'IsInternational', type: 'boolean' },
-        { name: 'IsFraudulent', type: 'boolean' }
+        { name: 'TransactionID',          type: 'string' },
+        { name: 'AccountID',              type: 'string' },
+        { name: 'AccountType',            type: 'string' },
+        { name: 'TransactionDate',        type: 'date' },
+        { name: 'Amount',                 type: 'number', numberType: 'decimals', minValue: -10000, maxValue: 10000  },
+        { name: 'Currency',               type: 'string' },
+        { name: 'MerchantName',           type: 'string' },
+        { name: 'Category',               type: 'string' },
+        { name: 'BalanceAfterTransaction',type: 'number', numberType: 'decimals', minValue: 0, maxValue: 100000 },
+        { name: 'IsInternational',        type: 'boolean' },
+        { name: 'IsFraudulent',           type: 'boolean' },
       ],
       healthcare: [
-        { name: 'PatientID', type: 'string' },
-        { name: 'FullName', type: 'string' },
-        { name: 'Age', type: 'number', numberType: 'integers', minValue: 0, maxValue: 100 },
-        { name: 'Gender', type: 'string' },
-        { name: 'VisitDate', type: 'date' },
-        { name: 'Diagnosis', type: 'string' },
-        { name: 'TreatmentPlan', type: 'string' },
-        { name: 'Medication', type: 'string' },
-        { name: 'BloodPressure', type: 'string' },
-        { name: 'HeartRate', type: 'number', numberType: 'integers', minValue: 50, maxValue: 180 },
+        { name: 'PatientID',        type: 'string' },
+        { name: 'FullName',         type: 'string' },
+        { name: 'Age',              type: 'number', numberType: 'integers', minValue: 0, maxValue: 100 },
+        { name: 'Gender',           type: 'string' },
+        { name: 'VisitDate',        type: 'date' },
+        { name: 'Diagnosis',        type: 'string' },
+        { name: 'TreatmentPlan',    type: 'string' },
+        { name: 'Medication',       type: 'string' },
+        { name: 'BloodPressure',    type: 'string' },
+        { name: 'HeartRate',        type: 'number', numberType: 'integers', minValue: 50, maxValue: 180 },
         { name: 'CholesterolLevel', type: 'number', numberType: 'decimals', minValue: 3.0, maxValue: 7.0 },
-        { name: 'FollowUpRequired', type: 'boolean' }
+        { name: 'FollowUpRequired', type: 'boolean' },
       ],
       school: [
-        { name: 'StudentID', type: 'string' },
-        { name: 'FullName', type: 'string' },
-        { name: 'GradeLevel', type: 'number', numberType: 'integers', minValue: 1, maxValue: 12 },
-        { name: 'Gender', type: 'string' },
-        { name: 'EnrollmentDate', type: 'date' },
-        { name: 'CourseName', type: 'string' },
-        { name: 'AssignmentScore', type: 'number', numberType: 'decimals', minValue: 0, maxValue: 100 },
-        { name: 'ExamScore', type: 'number', numberType: 'decimals', minValue: 0, maxValue: 100 },
-        { name: 'FinalGrade', type: 'string' },
-        { name: 'AttendanceRate', type: 'number', numberType: 'decimals', minValue: 50, maxValue: 100 },
-        { name: 'ScholarshipRecipient', type: 'boolean' }
+        { name: 'StudentID',         type: 'string' },
+        { name: 'FullName',          type: 'string' },
+        { name: 'GradeLevel',        type: 'number', numberType: 'integers', minValue: 1,  maxValue: 12  },
+        { name: 'Gender',            type: 'string' },
+        { name: 'EnrollmentDate',    type: 'date' },
+        { name: 'CourseName',        type: 'string' },
+        { name: 'AssignmentScore',   type: 'number', numberType: 'decimals', minValue: 0,  maxValue: 100 },
+        { name: 'ExamScore',         type: 'number', numberType: 'decimals', minValue: 0,  maxValue: 100 },
+        { name: 'FinalGrade',        type: 'string' },
+        { name: 'AttendanceRate',    type: 'number', numberType: 'decimals', minValue: 50, maxValue: 100 },
+        { name: 'ScholarshipRecipient', type: 'boolean' },
       ],
       marketing: [
-        { name: 'UserID', type: 'string' },
-        { name: 'CampaignID', type: 'string' },
+        { name: 'UserID',      type: 'string' },
+        { name: 'CampaignID',  type: 'string' },
         { name: 'Impressions', type: 'number', numberType: 'integers', minValue: 100, maxValue: 10000 },
-        { name: 'Clicks', type: 'number', numberType: 'integers', minValue: 1, maxValue: 500 },
-        { name: 'Conversions', type: 'number', numberType: 'integers', minValue: 0, maxValue: 50 },
-        { name: 'AdSpend', type: 'number', numberType: 'decimals', minValue: 5, maxValue: 500 },
-        { name: 'Date', type: 'date' }
+        { name: 'Clicks',      type: 'number', numberType: 'integers', minValue: 1,   maxValue: 500   },
+        { name: 'Conversions', type: 'number', numberType: 'integers', minValue: 0,   maxValue: 50    },
+        { name: 'AdSpend',     type: 'number', numberType: 'decimals', minValue: 5,   maxValue: 500   },
+        { name: 'Date',        type: 'date' },
       ],
       sports: [
-        { name: 'PlayerID', type: 'string' },
-        { name: 'FullName', type: 'string' },
-        { name: 'TeamName', type: 'string' },
-        { name: 'Sport', type: 'string' },
-        { name: 'MatchDate', type: 'date' },
-        { name: 'Position', type: 'string' },
-        { name: 'MinutesPlayed', type: 'number', numberType: 'integers', minValue: 0, maxValue: 120 },
-        { name: 'GoalsScored', type: 'number', numberType: 'integers', minValue: 0, maxValue: 5 },
-        { name: 'Assists', type: 'number', numberType: 'integers', minValue: 0, maxValue: 5 },
-        { name: 'YellowCards', type: 'number', numberType: 'integers', minValue: 0, maxValue: 2 },
-        { name: 'RedCard', type: 'boolean' },
-        { name: 'Injury', type: 'boolean' }
+        { name: 'PlayerID',       type: 'string' },
+        { name: 'FullName',       type: 'string' },
+        { name: 'TeamName',       type: 'string' },
+        { name: 'Sport',          type: 'string' },
+        { name: 'MatchDate',      type: 'date' },
+        { name: 'Position',       type: 'string' },
+        { name: 'MinutesPlayed',  type: 'number', numberType: 'integers', minValue: 0, maxValue: 120 },
+        { name: 'GoalsScored',    type: 'number', numberType: 'integers', minValue: 0, maxValue: 5   },
+        { name: 'Assists',        type: 'number', numberType: 'integers', minValue: 0, maxValue: 5   },
+        { name: 'YellowCards',    type: 'number', numberType: 'integers', minValue: 0, maxValue: 2   },
+        { name: 'RedCard',        type: 'boolean' },
+        { name: 'Injury',         type: 'boolean' },
       ],
       videogames: [
-        { name: 'PlayerID', type: 'string' },
-        { name: 'Username', type: 'string' },
-        { name: 'GameTitle', type: 'string' },
-        { name: 'SessionStart', type: 'date' },
-        { name: 'SessionEnd', type: 'date' },
-        { name: 'SessionDurationMinutes', type: 'number', numberType: 'integers', minValue: 5, maxValue: 300 },
-        { name: 'LevelAchieved', type: 'number', numberType: 'integers', minValue: 1, maxValue: 100 },
-        { name: 'InGameCurrencyEarned', type: 'number', numberType: 'decimals', minValue: 0, maxValue: 5000 },
-        { name: 'ItemsPurchased', type: 'number', numberType: 'integers', minValue: 0, maxValue: 50 },
-        { name: 'UsedMicrotransactions', type: 'boolean' },
-        { name: 'IsPremiumUser', type: 'boolean' }
-      ]
+        { name: 'PlayerID',                 type: 'string' },
+        { name: 'Username',                 type: 'string' },
+        { name: 'GameTitle',                type: 'string' },
+        { name: 'SessionStart',             type: 'date' },
+        { name: 'SessionEnd',               type: 'date' },
+        { name: 'SessionDurationMinutes',   type: 'number', numberType: 'integers', minValue: 5,    maxValue: 300  },
+        { name: 'LevelAchieved',            type: 'number', numberType: 'integers', minValue: 1,    maxValue: 100  },
+        { name: 'InGameCurrencyEarned',     type: 'number', numberType: 'decimals', minValue: 0,    maxValue: 5000 },
+        { name: 'ItemsPurchased',           type: 'number', numberType: 'integers', minValue: 0,    maxValue: 50   },
+        { name: 'UsedMicrotransactions',    type: 'boolean' },
+        { name: 'IsPremiumUser',            type: 'boolean' },
+      ],
     };
     if (selectedTemplate && templates[selectedTemplate]) {
       setColumns(templates[selectedTemplate]);
+      toast({ title: 'Template Loaded', description: `Loaded ${templates[selectedTemplate].length} columns.` });
     }
   };
 
-
   const generateData = async () => {
     if (!columns.length) {
-      toast({ title: 'No columns defined', variant: 'destructive' });
+      toast({ title: 'No columns defined', description: 'Add at least one column first.', variant: 'destructive' });
       return;
     }
     setIsGenerating(true);
-
     const configPayload = { rowCount, distributionType, customInstructions, template: selectedTemplate, columns };
     try {
-      // Use environment variable for production API URL, or fallback to local port 8000 for development
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
       const resp = await fetch(`${API_URL}/api/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(configPayload)
+        body: JSON.stringify(configPayload),
       });
       if (!resp.ok) {
-        const errorData = await resp.json(); // Assuming error response is JSON
-        throw new Error(errorData.details || errorData.error || 'Unknown error during generation.');
+        const err = await resp.json();
+        throw new Error(err.details || err.error || 'Unknown error during generation.');
       }
-
       const { status, table } = await resp.json();
       if (status === 'ok' && Array.isArray(table)) {
         setGeneratedData(table);
-        toast({ title: 'Data Generated!', description: `Loaded ${table.length} rows.` });
+        toast({ title: '✅ Data Generated!', description: `Loaded ${table.length} rows.` });
       } else {
         throw new Error('Invalid data format received from server.');
       }
     } catch (err) {
-      toast({ title: 'Error Generating Data', description: err.message, variant: 'destructive' });
+      toast({ title: 'Generation Failed', description: err.message, variant: 'destructive' });
     } finally {
       setIsGenerating(false);
     }
@@ -223,293 +209,346 @@ const Generate = () => {
     }
     let content, filename, mimeType;
     switch (format) {
-      case 'csv':
-        // Use the actual generated data's keys for CSV header if columns state is not fully representative
-        const csvColumns = columns.length > 0 ? columns.map(c => c.name) : Object.keys(generatedData[0] || {});
-        content = [
-          csvColumns.join(','),
-          ...generatedData.map(r => csvColumns.map(colName => r[colName] ?? '').join(','))
-        ].join('\n');
-        filename = 'data.csv';
-        mimeType = 'text/csv';
-        break;
+      case 'csv': {
+        const cols = columns.length > 0 ? columns.map(c => c.name) : Object.keys(generatedData[0] || {});
+        content = [cols.join(','), ...generatedData.map(r => cols.map(n => r[n] ?? '').join(','))].join('\n');
+        filename = 'data.csv'; mimeType = 'text/csv'; break;
+      }
       case 'json':
         content = JSON.stringify(generatedData, null, 2);
-        filename = 'data.json';
-        mimeType = 'application/json';
-        break;
+        filename = 'data.json'; mimeType = 'application/json'; break;
       case 'txt':
         content = generatedData.map(r => columns.map(c => `${c.name}: ${r[c.name] ?? 'N/A'}`).join(' | ')).join('\n');
-        filename = 'data.txt';
-        mimeType = 'text/plain';
-        break;
+        filename = 'data.txt'; mimeType = 'text/plain'; break;
     }
     const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
+    const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
     URL.revokeObjectURL(url);
     toast({ title: 'Download Started', description: filename });
   };
 
+  /* derive column list for table rendering */
+  const tableCols = columns.length > 0
+    ? columns
+    : Object.keys(generatedData[0] || {}).map(name => ({ name }));
+
   return (
-    <div className="min-h-[calc(100vh-64px)] p-4 relative z-10">
+    <div className="min-h-[calc(100vh-64px)] py-8 px-4 relative z-10">
       <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gradient mb-4">
+
+        {/* ── Page Heading ── */}
+        <div className="text-center mb-10">
+          <h1 className="text-4xl md:text-5xl font-bold text-gradient mb-3 tracking-tight">
             Generate Your Dataset
           </h1>
-          <p className="text-xl text-slate-400">
+          <p className="text-slate-400 text-lg max-w-xl mx-auto">
             Create realistic, customizable datasets with advanced parameters
           </p>
         </div>
-        <div className="grid lg:grid-cols-2 gap-8">
+
+        <div className="grid lg:grid-cols-2 gap-8 items-start">
+
+          {/* ══════════ LEFT COLUMN ══════════ */}
           <div className="space-y-6">
-            {/* Configuration Card */}
-            <Card className="glass-panel text-slate-200 border-none shadow-none">
-              <CardHeader>
-                <CardTitle className="text-white">Dataset Configuration</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Tabs value={activeTab} onValueChange={setActiveTab}>
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="manual">Manual Setup</TabsTrigger>
-                    <TabsTrigger value="template">Templates</TabsTrigger>
-                  </TabsList>
 
-                  {/* Templates Tab */}
-                  <TabsContent value="template" className="space-y-4">
-                    <div>
-                      <Label>Dataset Template</Label>
-                      <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
-                        <SelectTrigger className="mt-2 bg-slate-900/50 border-sky-900/50 text-slate-200">
-                          <SelectValue placeholder="Choose a template" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-slate-900 border-sky-900/50 text-slate-200">
-                          {datasetTemplates.map(t => (
-                            <SelectItem key={t.value} value={t.value} className="focus:bg-sky-900/50 focus:text-sky-100 cursor-pointer">
-                              {t.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {selectedTemplate && (
-                        <p className="text-sm text-sky-200/70 mt-2">
-                          {datasetTemplates.find(t => t.value === selectedTemplate).description}
-                        </p>
-                      )}
-                    </div>
-                    <Button
-                      onClick={generateFromTemplate}
-                      disabled={!selectedTemplate}
-                      className="w-full bg-[hsl(var(--primary))] text-white hover:bg-[hsl(var(--primary)/0.85)] active:scale-95 transition"
-                    >
-                      <Wand2 className="h-4 w-4 mr-2" /> Load Template
-                    </Button>
-                  </TabsContent>
+            {/* 1. Dataset Configuration Card */}
+            <div className="glass-panel p-6">
+              <h2 className="text-xl font-bold text-white mb-5 flex items-center gap-2">
+                <span className="w-2 h-5 rounded-full bg-gradient-to-b from-sky-400 to-indigo-500 inline-block"/>
+                Dataset Configuration
+              </h2>
 
-                  {/* Manual Tab */}
-                  <TabsContent value="manual" className="space-y-4">
-                    <div>
-                      <Label htmlFor="new-column" className="text-slate-300">Add New Column</Label>
-                      <div className="flex space-x-2 mt-2">
-                        <Input
-                          id="new-column"
-                          className="bg-slate-900/50 border-sky-900/50 text-slate-200 placeholder-slate-500"
-                          value={newColumnName}
-                          onChange={e => setNewColumnName(e.target.value)}
-                          placeholder="Enter column name"
-                          onKeyPress={e => e.key === 'Enter' && addColumn()}
-                        />
-                        <Button
-                          onClick={addColumn}
-                          className="bg-[hsl(var(--primary))] text-white hover:bg-[hsl(var(--primary)/0.85)] active:scale-95 transition"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </TabsContent>
-                </Tabs>
+              {/* Tabs toggle */}
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList className="w-full mb-5">
+                  <TabsTrigger value="manual">Manual Setup</TabsTrigger>
+                  <TabsTrigger value="template">Templates</TabsTrigger>
+                </TabsList>
 
-                <div className="mt-6 space-y-4">
+                {/* ── Templates Tab ── */}
+                <TabsContent value="template" className="space-y-5">
                   <div>
-                    <Label htmlFor="row-count" className="text-slate-300">Number of Rows</Label>
-                    <Input
-                      id="row-count"
-                      type="number"
-                      className="mt-2 bg-slate-900/50 border-sky-900/50 text-slate-200"
-                      value={rowCount}
-                      onChange={e => setRowCount(+e.target.value)}
-                      min="1"
-                      max="10000"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-slate-300">Distribution Type</Label>
-                    <Select
-                      value={distributionType}
-                      onValueChange={setDistributionType}
-                    >
-                      <SelectTrigger className="mt-2 bg-slate-900/50 border-sky-900/50 text-slate-200">
-                        <SelectValue />
+                    <SectionLabel>Dataset Template</SectionLabel>
+                    <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose a template…" />
                       </SelectTrigger>
-                      <SelectContent className="bg-slate-900 border-sky-900/50 text-slate-200">
-                        <SelectItem value="balanced" className="focus:bg-sky-900/50 cursor-pointer">Balanced Dataset</SelectItem>
-                        <SelectItem value="distorted" className="focus:bg-sky-900/50 cursor-pointer">Distorted/Noisy Dataset</SelectItem>
+                      <SelectContent>
+                        {datasetTemplates.map(t => (
+                          <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
-                    <p className="text-sm text-sky-200/70 mt-1">
-                      {distributionType === 'balanced'
-                        ? 'Well-balanced data for standard training'
-                        : 'Noisy, distorted data for data cleaning practice'}
-                    </p>
+                    {selectedTemplate && (
+                      <p className="text-xs text-sky-400/80 mt-2 pl-1">
+                        {datasetTemplates.find(t => t.value === selectedTemplate)?.description}
+                      </p>
+                    )}
                   </div>
-                  <div>
-                    <Label htmlFor="custom-instructions" className="text-slate-300">Custom Instructions</Label>
-                    <Textarea
-                      id="custom-instructions"
-                      className="mt-2 bg-slate-900/50 border-sky-900/50 text-slate-200 placeholder-slate-500"
-                      value={customInstructions}
-                      onChange={e => setCustomInstructions(e.target.value)}
-                      placeholder="Any special requirements or patterns"
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
 
-            {/* Column Settings */}
+                  {/* Load Template button — prominent, full-width */}
+                  <button
+                    onClick={generateFromTemplate}
+                    disabled={!selectedTemplate}
+                    className={[
+                      'w-full flex items-center justify-center gap-2.5',
+                      'py-3 px-6 rounded-xl',
+                      'font-semibold text-sm tracking-wide',
+                      'transition-all duration-200 active:scale-[0.97]',
+                      selectedTemplate
+                        ? 'bg-gradient-to-r from-sky-500 to-indigo-500 text-white shadow-lg shadow-sky-500/30 hover:from-sky-400 hover:to-indigo-400 hover:shadow-sky-500/50'
+                        : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed',
+                    ].join(' ')}
+                  >
+                    <Wand2 className="h-4.5 w-4.5" />
+                    Load Template
+                  </button>
+                </TabsContent>
+
+                {/* ── Manual Tab ── */}
+                <TabsContent value="manual" className="space-y-4">
+                  <div>
+                    <SectionLabel>Add New Column</SectionLabel>
+                    <div className="flex gap-2">
+                      <Input
+                        id="new-column"
+                        value={newColumnName}
+                        onChange={e => setNewColumnName(e.target.value)}
+                        placeholder="Enter column name (comma-separated for multiple)"
+                        onKeyPress={e => e.key === 'Enter' && addColumn()}
+                        className="flex-1"
+                      />
+                      <button
+                        onClick={addColumn}
+                        className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500 to-indigo-500 text-white hover:from-sky-400 hover:to-indigo-400 shadow-lg shadow-sky-500/30 transition-all duration-200 active:scale-95 flex-shrink-0"
+                        title="Add column"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                </TabsContent>
+              </Tabs>
+
+              {/* ── Shared fields below tabs ── */}
+              <div className="mt-6 space-y-5">
+                <div>
+                  <SectionLabel>Number of Rows</SectionLabel>
+                  <Input
+                    id="row-count"
+                    type="number"
+                    value={rowCount}
+                    onChange={e => setRowCount(+e.target.value)}
+                    min="1"
+                    max="10000"
+                  />
+                </div>
+
+                <div>
+                  <SectionLabel>Distribution Type</SectionLabel>
+                  <Select value={distributionType} onValueChange={setDistributionType}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="balanced">Balanced Dataset</SelectItem>
+                      <SelectItem value="distorted">Distorted / Noisy Dataset</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-sky-400/75 mt-2 pl-1">
+                    {distributionType === 'balanced'
+                      ? '⚖️  Well-balanced data for standard training'
+                      : '📡  Noisy, distorted data for data cleaning practice'}
+                  </p>
+                </div>
+
+                <div>
+                  <SectionLabel>Custom Instructions</SectionLabel>
+                  <textarea
+                    id="custom-instructions"
+                    value={customInstructions}
+                    onChange={e => setCustomInstructions(e.target.value)}
+                    placeholder="Any special requirements or patterns you want in the data…"
+                    rows={3}
+                    className={[
+                      'w-full resize-none rounded-lg px-3 py-2.5 text-sm',
+                      'bg-[rgba(10,18,40,0.75)] text-slate-100 placeholder:text-slate-500',
+                      'border border-slate-600/70',
+                      'outline-none',
+                      'transition-all duration-200',
+                      'focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20',
+                    ].join(' ')}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Column Settings Card */}
             {columns.length > 0 && (
-              <Card className="glass-panel text-slate-200 border-none shadow-none">
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2 text-white">
-                    <Settings className="h-5 w-5 text-sky-400" /> <span>Column Settings</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
+              <div className="glass-panel p-6">
+                <h2 className="text-xl font-bold text-white mb-5 flex items-center gap-2">
+                  <Settings className="h-5 w-5 text-sky-400 flex-shrink-0" />
+                  <span>Column Settings</span>
+                  <span className="ml-auto text-xs font-normal text-slate-500 bg-slate-800 px-2.5 py-1 rounded-full border border-slate-700">
+                    {columns.length} {columns.length === 1 ? 'column' : 'columns'}
+                  </span>
+                </h2>
+
+                <div className="space-y-4 max-h-[480px] overflow-y-auto pr-1 custom-scrollbar">
                   {columns.map((column, index) => (
-                    <div key={index} className="bg-slate-800/40 border border-sky-900/30 rounded-lg p-4 space-y-4">
+                    <div
+                      key={index}
+                      className="rounded-xl p-4 space-y-4"
+                      style={{
+                        background: 'rgba(15,23,52,0.65)',
+                        border: '1px solid rgba(56,189,248,0.14)',
+                      }}
+                    >
+                      {/* Column header row */}
                       <div className="flex items-center justify-between">
-                        <div className="inline-flex items-center px-3 py-1 rounded-full bg-slate-900/80 border border-sky-500/30 text-sm font-medium text-sky-300 tracking-wide">
+                        <span
+                          className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold tracking-wide"
+                          style={{
+                            background: 'linear-gradient(135deg, rgba(14,165,233,0.2), rgba(99,102,241,0.2))',
+                            border: '1px solid rgba(56,189,248,0.3)',
+                            color: '#7dd3fc',
+                          }}
+                        >
                           {column.name}
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
+                        </span>
+                        <button
                           onClick={() => removeColumn(index)}
-                          className="text-slate-400 hover:text-red-400 hover:bg-red-900/20"
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/15 transition-all duration-150"
+                          title="Remove column"
                         >
                           <Trash2 className="h-4 w-4" />
-                        </Button>
+                        </button>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                      {/* Type selectors */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <Label className="text-slate-300">Data Type</Label>
-                          <Select
-                            value={column.type}
-                            onValueChange={v => updateColumn(index, { type: v })}
-                          >
-                            <SelectTrigger className="mt-1 bg-slate-900/50 border-sky-900/50 text-slate-200">
+                          <SectionLabel>Data Type</SectionLabel>
+                          <Select value={column.type} onValueChange={v => updateColumn(index, { type: v })}>
+                            <SelectTrigger>
                               <SelectValue />
                             </SelectTrigger>
-                            <SelectContent className="bg-slate-900 border-sky-900/50 text-slate-200">
-                              <SelectItem value="string" className="focus:bg-sky-900/50 cursor-pointer">Text</SelectItem>
-                              <SelectItem value="number" className="focus:bg-sky-900/50 cursor-pointer">Number</SelectItem>
-                              <SelectItem value="email" className="focus:bg-sky-900/50 cursor-pointer">Email</SelectItem>
-                              <SelectItem value="date" className="focus:bg-sky-900/50 cursor-pointer">Date</SelectItem>
-                              <SelectItem value="boolean" className="focus:bg-sky-900/50 cursor-pointer">Boolean</SelectItem>
+                            <SelectContent>
+                              <SelectItem value="string">Text</SelectItem>
+                              <SelectItem value="number">Number</SelectItem>
+                              <SelectItem value="email">Email</SelectItem>
+                              <SelectItem value="date">Date</SelectItem>
+                              <SelectItem value="boolean">Boolean</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
+
                         {column.type === 'number' && (
-                          <>
-                            <div>
-                              <Label className="text-slate-300">Number Type</Label>
-                              <Select
-                                value={column.numberType || 'integers'}
-                                onValueChange={v => updateColumn(index, { numberType: v })}
-                              >
-                                <SelectTrigger className="mt-1 bg-slate-900/50 border-sky-900/50 text-slate-200">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="bg-slate-900 border-sky-900/50 text-slate-200">
-                                  <SelectItem value="integers" className="focus:bg-sky-900/50 cursor-pointer">Integers Only</SelectItem>
-                                  <SelectItem value="decimals" className="focus:bg-sky-900/50 cursor-pointer">Decimals Only</SelectItem>
-                                  <SelectItem value="mixed" className="focus:bg-sky-900/50 cursor-pointer">Mixed</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div>
-                              <Label className="text-slate-300">Min Value</Label>
-                              <Input
-                                type="number"
-                                value={column.minValue || 0}
-                                onChange={e => updateColumn(index, { minValue: parseInt(e.target.value) })}
-                                className="mt-1 bg-slate-900/50 border-sky-900/50 text-slate-200"
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-slate-300">Max Value</Label>
-                              <Input
-                                type="number"
-                                value={column.maxValue || 100}
-                                onChange={e => updateColumn(index, { maxValue: parseInt(e.target.value) })}
-                                className="mt-1 bg-slate-900/50 border-sky-900/50 text-slate-200"
-                              />
-                            </div>
-                          </>
+                          <div>
+                            <SectionLabel>Number Type</SectionLabel>
+                            <Select value={column.numberType || 'integers'} onValueChange={v => updateColumn(index, { numberType: v })}>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="integers">Integers Only</SelectItem>
+                                <SelectItem value="decimals">Decimals Only</SelectItem>
+                                <SelectItem value="mixed">Mixed</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
                         )}
                       </div>
+
+                      {/* Min / Max for numbers */}
+                      {column.type === 'number' && (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <SectionLabel>Min Value</SectionLabel>
+                            <Input
+                              type="number"
+                              value={column.minValue ?? 0}
+                              onChange={e => updateColumn(index, { minValue: parseFloat(e.target.value) })}
+                            />
+                          </div>
+                          <div>
+                            <SectionLabel>Max Value</SectionLabel>
+                            <Input
+                              type="number"
+                              value={column.maxValue ?? 100}
+                              onChange={e => updateColumn(index, { maxValue: parseFloat(e.target.value) })}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Missing values slider */}
                       <div>
-                        <Label>Missing Values: {column.nanPercentage}%</Label>
+                        <div className="flex justify-between items-center mb-2">
+                          <SectionLabel>Missing Values</SectionLabel>
+                          <span className="text-xs font-mono font-semibold text-sky-400 bg-sky-400/10 px-2 py-0.5 rounded-md border border-sky-400/20">
+                            {column.nanPercentage}%
+                          </span>
+                        </div>
                         <Slider
                           value={[column.nanPercentage]}
                           onValueChange={v => updateColumn(index, { nanPercentage: v[0] })}
                           max={50}
                           step={1}
-                          className="mt-2"
                         />
                       </div>
-                      <div className="flex items-center justify-between">
-                        <Label>Add Noise</Label>
-                        <Switch
-                          checked={column.addNoise}
-                          onCheckedChange={c => updateColumn(index, { addNoise: c })}
-                        />
+
+                      {/* Add Noise toggle */}
+                      <div className="flex items-center justify-between py-1">
+                        <div>
+                          <p className="text-sm font-medium text-slate-300">Add Noise</p>
+                          <p className="text-xs text-slate-500">Introduce random noise to values</p>
+                        </div>
+                        <Switch checked={column.addNoise} onCheckedChange={c => updateColumn(index, { addNoise: c })} />
                       </div>
+
                       {column.addNoise && (
                         <div>
-                          <Label>Noise Level: {column.noiseLevel}%</Label>
+                          <div className="flex justify-between items-center mb-2">
+                            <SectionLabel>Noise Level</SectionLabel>
+                            <span className="text-xs font-mono font-semibold text-indigo-400 bg-indigo-400/10 px-2 py-0.5 rounded-md border border-indigo-400/20">
+                              {column.noiseLevel}%
+                            </span>
+                          </div>
                           <Slider
                             value={[column.noiseLevel]}
                             onValueChange={v => updateColumn(index, { noiseLevel: v[0] })}
                             max={20}
                             step={1}
-                            className="mt-2"
                           />
                         </div>
                       )}
+
+                      {/* Outliers (number columns only) */}
                       {column.type === 'number' && (
                         <>
-                          <div className="flex items-center justify-between">
-                            <Label>Add Outliers</Label>
-                            <Switch
-                              checked={column.addOutliers}
-                              onCheckedChange={c => updateColumn(index, { addOutliers: c })}
-                            />
+                          <div className="flex items-center justify-between py-1">
+                            <div>
+                              <p className="text-sm font-medium text-slate-300">Add Outliers</p>
+                              <p className="text-xs text-slate-500">Inject extreme values into the column</p>
+                            </div>
+                            <Switch checked={column.addOutliers} onCheckedChange={c => updateColumn(index, { addOutliers: c })} />
                           </div>
+
                           {column.addOutliers && (
                             <div>
-                              <Label>Outlier Percentage: {column.outlierPercentage}%</Label>
+                              <div className="flex justify-between items-center mb-2">
+                                <SectionLabel>Outlier Percentage</SectionLabel>
+                                <span className="text-xs font-mono font-semibold text-purple-400 bg-purple-400/10 px-2 py-0.5 rounded-md border border-purple-400/20">
+                                  {column.outlierPercentage}%
+                                </span>
+                              </div>
                               <Slider
                                 value={[column.outlierPercentage]}
                                 onValueChange={v => updateColumn(index, { outlierPercentage: v[0] })}
                                 max={20}
                                 step={1}
-                                className="mt-2"
                               />
                             </div>
                           )}
@@ -517,66 +556,83 @@ const Generate = () => {
                       )}
                     </div>
                   ))}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             )}
 
-            {/* Generate & Download */}
-            <Card className="glass-panel border-none shadow-none text-slate-200">
-              <CardContent className="pt-6">
-                <Button
-                  onClick={generateData}
-                  disabled={isGenerating}
-                  size="lg"
-                  className="w-full text-white bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 border-none shadow-lg text-lg font-semibold"
-                >
-                  {isGenerating ? 'Generating...' : 'Generate Data'}
-                </Button>
-
-                {generatedData.length > 0 && (
-                  <div className="mt-4 space-y-2">
-                    <Label>Download Options</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {['csv', 'json', 'txt'].map(fmt => (
-                        <Button
-                          key={fmt}
-                          variant="outline"
-                          onClick={() => downloadData(fmt)}
-                          className="flex-1 min-w-0"
-                        >
-                          {fmt === 'csv'
-                            ? <Download className="h-4 w-4 mr-2" />
-                            : <FileText className="h-4 w-4 mr-2" />}
-                          {fmt.toUpperCase()}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
+            {/* 3. Generate & Download Card */}
+            <div className="glass-panel p-6 space-y-4">
+              <button
+                onClick={generateData}
+                disabled={isGenerating}
+                className={[
+                  'w-full flex items-center justify-center gap-3',
+                  'py-3.5 rounded-xl text-base font-bold tracking-wide',
+                  'transition-all duration-200 active:scale-[0.98]',
+                  isGenerating
+                    ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-500 text-white shadow-xl shadow-sky-500/30 hover:from-sky-400 hover:via-blue-400 hover:to-indigo-400 hover:shadow-sky-500/50',
+                ].join(' ')}
+              >
+                {isGenerating ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-slate-500 border-t-slate-300" />
+                    Generating…
+                  </>
+                ) : (
+                  <>
+                    <Database className="h-5 w-5" />
+                    Generate Data
+                  </>
                 )}
-              </CardContent>
-            </Card>
-          </div>
+              </button>
 
-          {/* Preview Panel */}
-          <div className="rounded-2xl overflow-hidden glass-panel shrink-0 self-start w-full">
+              {generatedData.length > 0 && (
+                <div>
+                  <SectionLabel>Download As</SectionLabel>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { fmt: 'csv',  icon: <Download className="h-4 w-4" />, label: 'CSV'  },
+                      { fmt: 'json', icon: <FileText  className="h-4 w-4" />, label: 'JSON' },
+                      { fmt: 'txt',  icon: <FileText  className="h-4 w-4" />, label: 'TXT'  },
+                    ].map(({ fmt, icon, label }) => (
+                      <button
+                        key={fmt}
+                        onClick={() => downloadData(fmt)}
+                        className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-semibold text-sky-300 border-2 border-sky-500/50 bg-sky-500/10 hover:bg-sky-500/20 hover:border-sky-400 hover:text-sky-200 transition-all duration-200 active:scale-95"
+                      >
+                        {icon}
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+          </div>{/* end left col */}
+
+          {/* ══════════ RIGHT COLUMN — Preview ══════════ */}
+          <div className="glass-panel overflow-hidden self-start">
+
             {/* Panel header */}
             <div
-              className="px-6 py-4 flex items-center justify-between border-b"
-              style={{ borderColor: 'rgba(56, 189, 248, 0.15)' }}
+              className="px-5 py-4 flex items-center justify-between"
+              style={{ borderBottom: '1px solid rgba(56,189,248,0.18)', background: 'rgba(9,14,35,0.7)' }}
             >
               <div className="flex items-center gap-3">
                 <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center"
-                  style={{ background: 'linear-gradient(135deg, #0ea5e9, #6366f1)', boxShadow: '0 0 12px rgba(14, 165, 233, 0.4)' }}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: 'linear-gradient(135deg,#0ea5e9,#6366f1)', boxShadow: '0 0 12px rgba(14,165,233,0.4)' }}
                 >
                   <Database className="h-4 w-4 text-white" />
                 </div>
-                <span className="font-semibold text-sky-100/90 text-lg">Generated Data Preview</span>
+                <span className="font-semibold text-slate-100 text-base">Generated Data Preview</span>
               </div>
               {generatedData.length > 0 && (
                 <span
-                  className="text-xs px-3 py-1 rounded-full font-semibold tracking-wide"
-                  style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#bae6fd', border: '1px solid rgba(56, 189, 248, 0.3)' }}
+                  className="text-xs px-3 py-1 rounded-full font-bold tracking-wide"
+                  style={{ background: 'rgba(56,189,248,0.12)', color: '#7dd3fc', border: '1px solid rgba(56,189,248,0.25)' }}
                 >
                   {generatedData.length} rows
                 </span>
@@ -585,44 +641,46 @@ const Generate = () => {
 
             <div className="p-4" ref={previewRef}>
               {isGenerating ? (
-                <div className="flex flex-col items-center justify-center py-16 space-y-4">
+                <div className="flex flex-col items-center justify-center py-20 space-y-4">
                   <div
                     className="animate-spin rounded-full h-12 w-12"
-                    style={{ border: '3px solid rgba(99,179,237,0.15)', borderTopColor: '#60a5fa', borderBottomColor: '#a78bfa' }}
+                    style={{ border: '3px solid rgba(99,179,237,0.15)', borderTopColor: '#38bdf8', borderBottomColor: '#818cf8' }}
                   />
-                  <p className="text-sm font-medium" style={{ color: '#93c5fd' }}>Generating your dataset…</p>
+                  <p className="text-sm font-medium text-sky-400/80 animate-pulse">Generating your dataset…</p>
                 </div>
               ) : !generatedData.length ? (
-                <div className="flex flex-col items-center justify-center py-16" style={{ color: 'rgba(148,163,184,0.6)' }}>
-                  <Database className="h-14 w-14 mb-4 opacity-30" />
-                  <p className="text-sm text-center max-w-xs">
-                    Configure your columns and click <strong style={{ color: '#93c5fd' }}>Generate Data</strong> to see a preview here.
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <div className="w-16 h-16 rounded-2xl mb-5 flex items-center justify-center"
+                    style={{ background: 'rgba(14,165,233,0.08)', border: '1px solid rgba(14,165,233,0.15)' }}>
+                    <Database className="h-8 w-8 text-sky-500/50" />
+                  </div>
+                  <p className="text-sm text-slate-500 max-w-52 leading-relaxed">
+                    Configure your columns and click{' '}
+                    <strong className="text-sky-400 font-semibold">Generate Data</strong>
+                    {' '}to see a preview here.
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto opacity-0 rounded-xl" ref={tableRef}
-                  style={{ border: '1px solid rgba(99,179,237,0.12)' }}
-                >
-                  <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>
+                <div ref={tableRef} className="overflow-x-auto rounded-xl custom-scrollbar" style={{ opacity: 0 }}>
+                  <table className="w-full text-sm" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
                     <thead>
-                      <tr style={{ background: 'rgba(4,18,43,0.7)' }}>
-                        {(columns.length > 0
-                          ? columns
-                          : Object.keys(generatedData[0] || {}).map(name => ({ name }))
-                        ).map((c, i) => (
+                      <tr style={{ background: 'rgba(5,12,35,0.85)' }}>
+                        {tableCols.map((c, i) => (
                           <th
                             key={i}
-                            className="px-4 py-3 text-left"
-                            style={{ borderBottom: '1px solid rgba(99,179,237,0.2)' }}
+                            className="px-4 py-3 text-left font-semibold whitespace-nowrap"
+                            style={{ borderBottom: '1px solid rgba(56,189,248,0.18)' }}
                           >
                             <span
-                              className="inline-block px-2 py-0.5 rounded-md text-xs font-semibold tracking-wide"
+                              className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold tracking-wide"
                               style={{
-                                background: i % 2 === 0
-                                  ? 'rgba(59,130,246,0.2)'
-                                  : 'rgba(139,92,246,0.2)',
-                                color: i % 2 === 0 ? '#93c5fd' : '#c4b5fd',
-                                border: `1px solid ${i % 2 === 0 ? 'rgba(99,179,237,0.3)' : 'rgba(167,139,250,0.3)'}`,
+                                background: i % 3 === 0
+                                  ? 'rgba(14,165,233,0.18)'
+                                  : i % 3 === 1
+                                    ? 'rgba(99,102,241,0.18)'
+                                    : 'rgba(168,85,247,0.18)',
+                                color: i % 3 === 0 ? '#7dd3fc' : i % 3 === 1 ? '#a5b4fc' : '#d8b4fe',
+                                border: `1px solid ${i % 3 === 0 ? 'rgba(56,189,248,0.3)' : i % 3 === 1 ? 'rgba(99,102,241,0.3)' : 'rgba(168,85,247,0.3)'}`,
                               }}
                             >
                               {c.name}
@@ -632,67 +690,66 @@ const Generate = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {generatedData.slice(0, 25).map((row, r) => {
-                        const cols = columns.length > 0
-                          ? columns
-                          : Object.keys(generatedData[0] || {}).map(name => ({ name }));
-                        return (
-                          <tr
-                            key={r}
-                            style={{
-                              background: r % 2 === 0
-                                ? 'rgba(255,255,255,0.025)'
-                                : 'rgba(255,255,255,0.01)',
-                              transition: 'background 0.15s',
-                            }}
-                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(99,179,237,0.08)'}
-                            onMouseLeave={e => e.currentTarget.style.background = r % 2 === 0 ? 'rgba(255,255,255,0.025)' : 'rgba(255,255,255,0.01)'}
-                          >
-                            {cols.map((c, j) => (
-                              <td
-                                key={j}
-                                className="px-4 py-2.5"
-                                style={{
-                                  borderBottom: '1px solid rgba(99,179,237,0.07)',
-                                  color: row[c.name] == null ? 'rgba(148,163,184,0.4)' : 'rgba(219,234,254,0.85)',
-                                  fontFamily: 'ui-monospace, "JetBrains Mono", monospace',
-                                  fontSize: '0.78rem',
-                                  letterSpacing: '0.01em',
-                                }}
-                              >
-                                {row[c.name] == null ? (
-                                  <span
-                                    className="px-1.5 py-0.5 rounded text-xs"
-                                    style={{ background: 'rgba(239,68,68,0.12)', color: 'rgba(252,165,165,0.6)', border: '1px solid rgba(239,68,68,0.2)' }}
-                                  >
-                                    null
-                                  </span>
-                                ) : (
-                                  String(row[c.name])
-                                )}
-                              </td>
-                            ))}
-                          </tr>
-                        );
-                      })}
+                      {generatedData.slice(0, 25).map((row, r) => (
+                        <tr
+                          key={r}
+                          style={{
+                            background: r % 2 === 0 ? 'rgba(255,255,255,0.022)' : 'transparent',
+                            transition: 'background 0.12s',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(56,189,248,0.07)'}
+                          onMouseLeave={e => e.currentTarget.style.background = r % 2 === 0 ? 'rgba(255,255,255,0.022)' : 'transparent'}
+                        >
+                          {tableCols.map((c, j) => (
+                            <td
+                              key={j}
+                              className="px-4 py-2.5 whitespace-nowrap"
+                              style={{
+                                borderBottom: '1px solid rgba(56,189,248,0.07)',
+                                fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+                                fontSize: '0.78rem',
+                                letterSpacing: '0.01em',
+                                color: row[c.name] == null
+                                  ? 'rgba(148,163,184,0.35)'
+                                  : 'rgba(226,232,240,0.9)',
+                              }}
+                            >
+                              {row[c.name] == null ? (
+                                <span
+                                  className="px-1.5 py-0.5 rounded text-xs"
+                                  style={{ background: 'rgba(239,68,68,0.12)', color: 'rgba(252,165,165,0.7)', border: '1px solid rgba(239,68,68,0.2)' }}
+                                >
+                                  null
+                                </span>
+                              ) : (
+                                String(row[c.name])
+                              )}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
+
                   {generatedData.length > 25 && (
                     <div
-                      className="text-center py-3 text-xs"
+                      className="text-center py-3 text-xs font-medium"
                       style={{
-                        color: 'rgba(148,163,184,0.6)',
-                        borderTop: '1px solid rgba(99,179,237,0.1)',
-                        background: 'rgba(4,18,43,0.5)',
+                        color: 'rgba(148,163,184,0.55)',
+                        borderTop: '1px solid rgba(56,189,248,0.1)',
+                        background: 'rgba(5,12,35,0.6)',
                       }}
                     >
-                      Showing 25 of <span style={{ color: '#93c5fd', fontWeight: 600 }}>{generatedData.length}</span> rows
+                      Showing 25 of{' '}
+                      <span style={{ color: '#7dd3fc', fontWeight: 700 }}>{generatedData.length}</span>{' '}
+                      rows
                     </div>
                   )}
                 </div>
               )}
             </div>
           </div>
+
         </div>
       </div>
     </div>

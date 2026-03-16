@@ -1,18 +1,20 @@
 import React from "react";
 import { cn } from "../Utils";
 
-/**
- * @param {object} props
- * @param {string} [props.className]
- * @param {string} [props.type]
- * @param {any} props.rest
- */
 export function Input({ className, type = "text", ...rest }) {
   return (
     <input
       type={type}
       className={cn(
-        "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+        "flex h-10 w-full rounded-lg px-3 py-2 text-sm",
+        "bg-[rgba(10,18,40,0.75)] text-slate-100 placeholder:text-slate-500",
+        "border border-slate-600/70",
+        "outline-none ring-0",
+        "transition-all duration-200",
+        "focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20",
+        "hover:border-slate-500",
+        "disabled:cursor-not-allowed disabled:opacity-40",
+        "file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground",
         className
       )}
       {...rest}

@@ -7,8 +7,11 @@ from flask_cors import CORS
 from openai import OpenAI
 
 app = Flask(__name__)
-# Enable CORS for the frontend origin
-CORS(app)
+
+CORS(app, origins=[
+    "https://datagen.pages.dev",      # Cloudflare Pages (no trailing slash!)
+    "http://localhost:5173",          # keep for local dev
+])
 
 @app.route('/', methods=['GET'])
 def health_check():
@@ -27,7 +30,7 @@ def generate_table():
     )
     
     # Use silent=True so it doesn't crash on bad Content-Type headers
-    config_payload = request.get_json(silent=True) or {}
+    config_payload: dict = request.get_json(silent=True) or {}
     columns = config_payload.get("columns", [])
     row_count = config_payload.get("rowCount", 5)
 
