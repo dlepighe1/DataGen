@@ -1,10 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { gsap } from 'gsap';
-import { Download, FileText, Database, Settings, Wand2, Plus, Trash2, ChevronDown } from 'lucide-react';
-import { Button } from '../components/UI/Button';
+import { Download, FileText, Database, Settings, Wand2, Plus, Trash2, AlertTriangle, WifiOff, ServerCrash, RefreshCw } from 'lucide-react';
 import { Input } from '../components/UI/Input';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/UI/Card';
-import { Textarea } from '../components/UI/Textarea';
 import { Slider } from '../components/UI/Slider';
 import { Switch } from '../components/UI/Switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/UI/Select';
@@ -28,6 +25,7 @@ const Generate = () => {
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [generatedData, setGeneratedData] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState(null); // { type, title, message }
   const [activeTab, setActiveTab] = useState('manual');
   const [distributionType, setDistributionType] = useState('balanced');
 
@@ -176,28 +174,88 @@ const Generate = () => {
       return;
     }
     setIsGenerating(true);
+    setGenerateError(null);
+
+    // Client-side timeout: abort after 2 minutes
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120_000);
+
     const configPayload = { rowCount, distributionType, customInstructions, template: selectedTemplate, columns };
+
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-      const resp = await fetch(`${API_URL}/api/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(configPayload),
-      });
+      let resp;
+      try {
+        resp = await fetch(`${API_URL}/api/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(configPayload),
+          signal: controller.signal,
+        });
+      } catch (fetchErr) {
+        // Network-level error: can't reach the server at all
+        if (fetchErr.name === 'AbortError') {
+          setGenerateError({
+            type: 'timeout',
+            title: 'Request Timed Out',
+            message: 'The request took too long (over 2 minutes). The AI model may be overloaded. Please try again.',
+          });
+        } else {
+          setGenerateError({
+            type: 'connection',
+            title: 'Cannot Connect to Backend',
+            message: `Unable to reach the DataGen server at ${API_URL}. Make sure the backend is running (python app.py) and that VITE_API_URL is set correctly.`,
+          });
+        }
+        return;
+      }
+
+      const data = await resp.json();
+
       if (!resp.ok) {
-        const err = await resp.json();
-        throw new Error(err.details || err.error || 'Unknown error during generation.');
+        const errType = data.error_type || 'unknown';
+        const errDetails = data.details || data.error || 'An unknown error occurred.';
+
+        if (errType === 'connection' || resp.status === 503) {
+          setGenerateError({
+            type: 'connection',
+            title: 'AI Service Unreachable',
+            message: errDetails,
+          });
+        } else if (errType === 'model_unavailable' || resp.status === 502) {
+          setGenerateError({
+            type: 'model',
+            title: 'AI Models Unavailable',
+            message: errDetails + ' This is usually temporary — please try again in a moment.',
+          });
+        } else if (errType === 'config' || resp.status === 500) {
+          setGenerateError({
+            type: 'config',
+            title: 'Server Configuration Error',
+            message: errDetails,
+          });
+        } else {
+          setGenerateError({
+            type: 'error',
+            title: 'Generation Failed',
+            message: errDetails,
+          });
+        }
+        return;
       }
-      const { status, table } = await resp.json();
-      if (status === 'ok' && Array.isArray(table)) {
-        setGeneratedData(table);
-        toast({ title: '✅ Data Generated!', description: `Loaded ${table.length} rows.` });
+
+      if (data.status === 'ok' && Array.isArray(data.table)) {
+        setGeneratedData(data.table);
+        toast({ title: '✅ Data Generated!', description: `Loaded ${data.table.length} rows.` });
       } else {
-        throw new Error('Invalid data format received from server.');
+        setGenerateError({
+          type: 'error',
+          title: 'Invalid Response',
+          message: 'The server returned an unexpected data format. Please try again.',
+        });
       }
-    } catch (err) {
-      toast({ title: 'Generation Failed', description: err.message, variant: 'destructive' });
     } finally {
+      clearTimeout(timeoutId);
       setIsGenerating(false);
     }
   };
@@ -646,7 +704,64 @@ const Generate = () => {
                     className="animate-spin rounded-full h-12 w-12"
                     style={{ border: '3px solid rgba(99,179,237,0.15)', borderTopColor: '#38bdf8', borderBottomColor: '#818cf8' }}
                   />
-                  <p className="text-sm font-medium text-sky-400/80 animate-pulse">Generating your dataset…</p>
+                  <div className="text-center space-y-1">
+                    <p className="text-sm font-medium text-sky-400/80 animate-pulse">Generating your dataset…</p>
+                    <p className="text-xs text-slate-500">This may take up to 90 seconds</p>
+                  </div>
+                </div>
+              ) : generateError ? (
+                /* ── Error panel ── */
+                <div className="flex flex-col items-center justify-center py-14 px-6 text-center space-y-5">
+                  <div
+                    className="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0"
+                    style={{
+                      background: generateError.type === 'connection' || generateError.type === 'timeout'
+                        ? 'rgba(239,68,68,0.12)' : 'rgba(234,179,8,0.12)',
+                      border: generateError.type === 'connection' || generateError.type === 'timeout'
+                        ? '1px solid rgba(239,68,68,0.25)' : '1px solid rgba(234,179,8,0.25)',
+                    }}
+                  >
+                    {generateError.type === 'connection' && <WifiOff className="h-8 w-8 text-red-400" />}
+                    {generateError.type === 'model'      && <ServerCrash className="h-8 w-8 text-amber-400" />}
+                    {generateError.type === 'timeout'    && <RefreshCw className="h-8 w-8 text-red-400" />}
+                    {generateError.type === 'config'     && <ServerCrash className="h-8 w-8 text-amber-400" />}
+                    {generateError.type === 'error'      && <AlertTriangle className="h-8 w-8 text-amber-400" />}
+                  </div>
+
+                  <div className="space-y-2 max-w-xs">
+                    <p className="font-bold text-slate-200 text-base">{generateError.title}</p>
+                    <p className="text-xs text-slate-400 leading-relaxed">{generateError.message}</p>
+                  </div>
+
+                  {/* Contextual hints */}
+                  {generateError.type === 'connection' && (
+                    <div
+                      className="text-left text-xs rounded-lg p-3 space-y-1 w-full max-w-xs"
+                      style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.15)' }}
+                    >
+                      <p className="font-semibold text-red-400 mb-1.5">Troubleshooting:</p>
+                      <p className="text-slate-400">1. Is the backend running? Run <code className="text-sky-400 bg-slate-800 px-1 rounded">python app.py</code></p>
+                      <p className="text-slate-400">2. Check <code className="text-sky-400 bg-slate-800 px-1 rounded">VITE_API_URL</code> in your <code className="text-sky-400 bg-slate-800 px-1 rounded">.env</code></p>
+                      <p className="text-slate-400">3. Make sure port 8000 is not blocked</p>
+                    </div>
+                  )}
+
+                  {generateError.type === 'model' && (
+                    <div
+                      className="text-left text-xs rounded-lg p-3 w-full max-w-xs"
+                      style={{ background: 'rgba(234,179,8,0.07)', border: '1px solid rgba(234,179,8,0.15)' }}
+                    >
+                      <p className="text-amber-400/80">All AI models (gpt-4o-mini, gpt-3.5-turbo, and free fallbacks) are currently unavailable on OpenRouter. This is a temporary upstream issue.</p>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => { setGenerateError(null); generateData(); }}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 shadow-lg shadow-sky-500/25 transition-all duration-200 active:scale-95"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Try Again
+                  </button>
                 </div>
               ) : !generatedData.length ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
