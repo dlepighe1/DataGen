@@ -2,7 +2,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
 /* ─────────────────────────────────────────────
-   Design Tokens — Light (unused but required)
+   Design Tokens, Light (unused but required)
 ───────────────────────────────────────────── */
 :root {
   --background: 222 47% 8%;
@@ -41,6 +41,15 @@
 *, *::before, *::after { box-sizing: border-box; }
 
 html { font-size: 16px; }
+
+/* Radix popovers (Select, DropdownMenu) lock body scroll while open, which
+   removes the scrollbar and shifts the whole page. Keep the page scrollbar
+   visible instead, so there is no layout jump when dropdowns open. */
+html body[data-scroll-locked] {
+  overflow: visible !important;
+  margin-right: 0 !important;
+  padding-right: 0 !important;
+}
 
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
@@ -92,11 +101,12 @@ body {
 }
 
 /* ─────────────────────────────────────────────
-   Tabs — high-contrast toggle
+   Tabs: high-contrast toggle
 ───────────────────────────────────────────── */
 .dg-tabs-list {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   background: rgba(10, 18, 40, 0.8);
   border: 1px solid rgba(56, 189, 248, 0.2);
   border-radius: 10px;
@@ -129,7 +139,7 @@ body {
 }
 
 /* ─────────────────────────────────────────────
-   Switch — clearly visible
+   Switch: clearly visible
 ───────────────────────────────────────────── */
 .dg-switch-root {
   position: relative;
@@ -166,7 +176,7 @@ body {
 }
 
 /* ─────────────────────────────────────────────
-   Slider — vivid track and thumb
+   Slider: vivid track and thumb
 ───────────────────────────────────────────── */
 .dg-slider-root {
   position: relative;

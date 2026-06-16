@@ -1,13 +1,37 @@
+"""DataGen API — hybrid synthetic data generation.
+
+Architecture:
+  1. The LLM (4-model fallback chain) generates a small pool of *coherent
+     semantic records* for text/email columns only, honoring custom
+     instructions. It never emits raw CSV.
+  2. generator.py synthesizes every number/date/boolean/ID column with NumPy:
+     exact missing percentages, real injected outliers, seeded reproducibility.
+  3. If the LLM is unreachable (or no API key), curated local pools take over —
+     generation never hard-fails because of an upstream model.
+"""
+
+import json
 import os
-import csv
 import re
-import time
-from io import StringIO
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from werkzeug.middleware.proxy_fix import ProxyFix
 from openai import OpenAI, APIConnectionError, APITimeoutError, APIStatusError
 
+from generator import generate_dataset, is_text_column, MAX_ROWS, MAX_COLUMNS
+from text_pools import build_local_records, expand_records
+from nlp_tasks import (
+    NLP_TASKS, POOL_KEYS, DEFAULT_LABELS, DEFAULT_NEGATIVE_RATIO,
+    build_nlp_prompt, build_offline_pool, generate_nlp_dataset,
+)
+
 app = Flask(__name__)
+app.json.sort_keys = False  # preserve column order in responses/exports
+# Trust the first proxy (Render/Heroku) so rate limiting keys on the real client IP
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 
 CORS(app, origins=[
     "https://datagen.pages.dev",      # Cloudflare Pages
@@ -15,17 +39,35 @@ CORS(app, origins=[
     "http://localhost:3000",          # Alternative local dev
 ])
 
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    storage_uri="memory://",
+    headers_enabled=True,
+)
+
 # ─────────────────────────────────────────────
 # Models to try in order. Falls back automatically.
 # ─────────────────────────────────────────────
 CANDIDATE_MODELS = [
-    "openai/gpt-4o-mini",            # Best quality, low cost — try first
-    "openai/gpt-3.5-turbo",          # Solid fallback
-    "meta-llama/llama-3.1-8b-instruct:free",  # Free tier fallback
+    "openai/gpt-4o-mini",                      # Best quality, low cost — try first
+    "openai/gpt-3.5-turbo",                    # Solid fallback
+    "meta-llama/llama-3.1-8b-instruct:free",   # Free tier fallback
     "mistralai/mistral-7b-instruct:free",      # Free tier fallback
 ]
 
-TIMEOUT_SECONDS = 90  # How long to wait for a single model response
+LLM_TIMEOUT_SECONDS = 45
+MAX_INSTRUCTIONS_CHARS = 600
+MAX_COLUMN_NAME_CHARS = 64
+
+
+@app.errorhandler(429)
+def handle_rate_limit(e):
+    return jsonify({
+        "error": "Too many requests",
+        "details": f"Rate limit exceeded ({e.description}). Please wait a moment before generating again.",
+        "error_type": "rate_limited",
+    }), 429
 
 
 @app.route('/', methods=['GET'])
@@ -33,246 +75,310 @@ def health_check():
     return jsonify({"status": "healthy", "message": "DataGen API is running."}), 200
 
 
-def build_prompt(columns, row_count, custom_instructions, distribution_type):
-    """Build the CSV generation prompt from column specs."""
-    column_details = []
-    for col in columns:
-        detail_parts: list[str] = [f"name: {col.get('name')}"]
-        col_type = col.get('type', 'string')
-        detail_parts.append(f"type: {col_type}")
+def build_semantic_prompt(text_columns, all_columns, template, custom_instructions, n_records):
+    """Ask for a JSON pool of coherent text records — never raw CSV."""
+    keys = [c["name"] for c in text_columns]
+    type_hints = []
+    for c in text_columns:
+        hint = "a realistic, valid email address" if c.get("type") == "email" else "realistic text"
+        type_hints.append(f'- "{c["name"]}": {hint}')
 
-        if col_type == 'number':
-            number_type = col.get('numberType', 'integers')
-            detail_parts.append(f"number_type: {number_type}")
-            min_val = col.get('minValue')
-            max_val = col.get('maxValue')
-            if min_val is not None and max_val is not None:
-                detail_parts.append(f"range: {min_val}-{max_val}")
-            elif min_val is not None:
-                detail_parts.append(f"min_value: {min_val}")
-            elif max_val is not None:
-                detail_parts.append(f"max_value: {max_val}")
+    context_cols = ", ".join(f"{c.get('name')} ({c.get('type', 'string')})" for c in all_columns)
+    template_line = f'The dataset theme is "{template}".\n' if template else ""
+    instructions_line = (
+        f"CUSTOM INSTRUCTIONS FROM THE USER (these take priority — follow them exactly):\n"
+        f"{custom_instructions.strip()}\n\n"
+    ) if custom_instructions and custom_instructions.strip() else ""
 
-        nan_percentage = col.get('nanPercentage', 0)
-        if nan_percentage > 0:
-            detail_parts.append(f"missing_percentage: {nan_percentage}%")
-
-        add_noise = col.get('addNoise', False)
-        noise_level = col.get('noiseLevel', 0)
-        if add_noise and noise_level > 0:
-            detail_parts.append(f"add_noise: {noise_level}%_level")
-
-        add_outliers = col.get('addOutliers', False)
-        outlier_percentage = col.get('outlierPercentage', 0)
-        if add_outliers and outlier_percentage > 0:
-            detail_parts.append(f"add_outliers: {outlier_percentage}%_percentage")
-
-        column_details.append(f"({', '.join(detail_parts)})")
-
-    detailed_col_string = ", ".join(column_details)
-    instruction_string = f" Special instructions: {custom_instructions.strip()}" if custom_instructions and custom_instructions.strip() else ""
-
-    if distribution_type == "distorted":
-        distribution_string = " Ensure the data is distorted and noisy with missing values and outliers."
-    elif distribution_type == "balanced":
-        distribution_string = " Ensure the data is well-balanced and clean."
-    else:
-        distribution_string = ""
-
-    prompt = (
-        f"Generate a dataset table with exactly {row_count} rows. "
-        f"Each column must strictly adhere to the following specifications:\n"
-        f"{detailed_col_string}.\n\n"
-        f"IMPORTANT RULES:\n"
-        f"1. Return ONLY the raw CSV string, with the first row as headers.\n"
-        f"2. Do NOT include markdown code fences (no ```csv or ```).\n"
-        f"3. Do NOT include any explanation, commentary, or extra text.\n"
-        f"4. Ensure ALL {row_count} rows are present in the output.\n"
-        f"5. Every row must have the exact same number of columns as the header.\n"
-        f"6. Respect the column types strictly — booleans must be true/false, "
-        f"emails must be valid format, dates must be YYYY-MM-DD format, etc.\n"
-        f"7. If a column has a missing_percentage, leave that percentage of cells empty (just a comma with no value).\n"
-        f"{instruction_string}{distribution_string}"
+    return (
+        f"You generate semantic content for a synthetic dataset.\n"
+        f"{template_line}"
+        f"Full schema for context: {context_cols}.\n\n"
+        f"{instructions_line}"
+        f"Return a JSON array of exactly {n_records} objects. Each object must contain "
+        f"exactly these keys: {json.dumps(keys)}.\n"
+        f"Field guidance:\n" + "\n".join(type_hints) + "\n\n"
+        f"Rules:\n"
+        f"1. Values within one object must be mutually consistent "
+        f"(e.g. an email must match that record's person name).\n"
+        f"2. Make values diverse — avoid repeating across objects.\n"
+        f"3. Return ONLY the JSON array. No markdown fences, no commentary."
     )
-    return prompt
 
 
-def try_generate(client, prompt):
-    """Try each model in order. Returns (csv_text, model_used) or raises."""
-    last_error = None
+def parse_record_pool(raw_text, text_columns):
+    """Robustly extract a list of dicts from model output and normalize keys."""
+    text = raw_text.strip()
+    fence = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL | re.IGNORECASE)
+    if fence:
+        text = fence.group(1).strip()
+    start, end = text.find("["), text.rfind("]")
+    if start == -1 or end == -1 or end <= start:
+        raise ValueError("No JSON array in model output.")
+    records = json.loads(text[start:end + 1])
+    if not isinstance(records, list):
+        raise ValueError("Model output is not a JSON array.")
+
+    expected = {c["name"].strip().lower(): c["name"] for c in text_columns}
+    normalized = []
+    for item in records:
+        if not isinstance(item, dict):
+            continue
+        rec = {}
+        for k, v in item.items():
+            canonical = expected.get(str(k).strip().lower())
+            if canonical is not None and v is not None:
+                rec[canonical] = str(v)
+        if len(rec) == len(expected):
+            normalized.append(rec)
+    if len(normalized) < 5:
+        raise ValueError(f"Only {len(normalized)} usable records in model output.")
+    return normalized
+
+
+def fetch_record_pool(client, prompt, pseudo_columns):
+    """Try each model in order. Returns (records, model_used) or (None, None)."""
     for model in CANDIDATE_MODELS:
         try:
             response = client.chat.completions.create(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
-                timeout=TIMEOUT_SECONDS,
+                temperature=1.0,
+                timeout=LLM_TIMEOUT_SECONDS,
             )
-            csv_text = response.choices[0].message.content.strip()
-            return csv_text, model
+            content = response.choices[0].message.content or ""
+            records = parse_record_pool(content, pseudo_columns)
+            app.logger.info(f"Semantic pool from '{model}': {len(records)} records")
+            return records, model
         except APITimeoutError:
-            last_error = f"Model '{model}' timed out after {TIMEOUT_SECONDS}s."
+            app.logger.warning(f"Model '{model}' timed out after {LLM_TIMEOUT_SECONDS}s.")
             continue
         except APIConnectionError as e:
-            last_error = f"Connection error while calling '{model}': {str(e)}"
-            break  # Connection error means the whole API is down, stop trying
+            app.logger.warning(f"Connection error calling '{model}': {e}")
+            break  # API unreachable — no point trying other models
         except APIStatusError as e:
-            # 429 = rate limited, 502/503 = bad gateway from upstream — try next model
-            if e.status_code in (429, 500, 502, 503):
-                last_error = f"Model '{model}' returned HTTP {e.status_code}: {e.message}"
-                continue
-            else:
-                raise  # Re-raise unexpected status errors
-        except Exception as e:
-            last_error = f"Unexpected error with model '{model}': {str(e)}"
+            app.logger.warning(f"Model '{model}' returned HTTP {e.status_code}.")
+            if e.status_code in (401, 403):
+                break  # Bad key — other models will fail identically
             continue
+        except (ValueError, json.JSONDecodeError) as e:
+            app.logger.warning(f"Unusable output from '{model}': {e}")
+            continue
+        except Exception as e:
+            app.logger.warning(f"Unexpected error with model '{model}': {e}")
+            continue
+    return None, None
 
-    raise RuntimeError(last_error or "All models failed without a specific error.")
 
+def validate_payload(payload):
+    """Returns (error_message, None) or (None, cleaned_config)."""
+    columns = payload.get("columns")
+    if not isinstance(columns, list) or not columns:
+        return "Please add at least one column before generating.", None
+    if len(columns) > MAX_COLUMNS:
+        return f"A maximum of {MAX_COLUMNS} columns is supported.", None
 
-def parse_csv_output(csv_text, columns):
-    """Parse the raw CSV string from the LLM into a list of dicts."""
-    match = re.search(r'```(?:csv)?\n?(.*?)\n?```', csv_text, re.DOTALL | re.IGNORECASE)
-    if match:
-        csv_text = match.group(1).strip()
+    seen = set()
+    for col in columns:
+        name = str(col.get("name", "")).strip()
+        if not name:
+            return "Every column needs a non-empty name.", None
+        if len(name) > MAX_COLUMN_NAME_CHARS:
+            return f"Column name '{name[:20]}…' is too long (max {MAX_COLUMN_NAME_CHARS} characters).", None
+        if name.lower() in seen:
+            return f"Duplicate column name: '{name}'.", None
+        seen.add(name.lower())
+        col["name"] = name
 
-    lines = [line.strip() for line in csv_text.split('\n') if line.strip()]
-    if not lines:
-        raise ValueError("No CSV data found in model output.")
+    try:
+        row_count = int(payload.get("rowCount", 100))
+    except (TypeError, ValueError):
+        return "Row count must be a whole number.", None
+    if not (1 <= row_count <= MAX_ROWS):
+        return f"Row count must be between 1 and {MAX_ROWS:,}.", None
 
-    csv_file = StringIO("\n".join(lines))
-    reader = list(csv.reader(csv_file))
+    seed = payload.get("seed")
+    if seed is not None and seed != "":
+        try:
+            seed = int(seed) % (2**31)
+        except (TypeError, ValueError):
+            return "Seed must be a whole number.", None
+    else:
+        seed = None
 
-    # Robustly locate the actual header row
-    expected_cols = [c.get('name', '').strip().lower() for c in columns]
-    header_index = 0
+    custom_instructions = str(payload.get("customInstructions") or "")[:MAX_INSTRUCTIONS_CHARS]
+    distribution = payload.get("distributionType", "balanced")
+    if distribution not in ("balanced", "distorted"):
+        distribution = "balanced"
 
-    for i, row in enumerate(reader):
-        row_lower = [v.strip().lower() for v in row]
-        if any(col in expected_cols for col in row_lower) and len(row) > 1:
-            header_index = i
-            break
-
-    header = [c.strip() for c in reader[header_index]]
-    parsed_table = []
-
-    for row_data in reader[header_index + 1:]:
-        if len(row_data) != len(header):
-            continue  # Skip malformed rows
-
-        row_dict = {}
-        for i, col_name in enumerate(header):
-            cleaned_col_name = col_name.strip()
-            value = row_data[i]
-
-            # Find matching column config (case-insensitive)
-            frontend_col = next(
-                (c for c in columns if c['name'].strip().lower() == cleaned_col_name.lower()),
-                None
-            )
-
-            if frontend_col and frontend_col.get('type') == 'number':
-                if value.strip() == '':
-                    value = None
-                else:
-                    clean_str = re.sub(r'[^\d.-]', '', value)
-                    try:
-                        temp_val = float(clean_str)
-                        if frontend_col.get('numberType') == 'integers' and temp_val.is_integer():
-                            value = int(temp_val)
-                        else:
-                            value = temp_val
-                    except ValueError:
-                        pass  # Leave as string if unparseable
-            elif value.strip() == '':
-                value = None
-
-            row_dict[cleaned_col_name] = value
-
-        parsed_table.append(row_dict)
-
-    return parsed_table
+    return None, {
+        "columns": columns,
+        "row_count": row_count,
+        "seed": seed,
+        "custom_instructions": custom_instructions,
+        "distribution": distribution,
+        "template": str(payload.get("template") or "")[:64],
+    }
 
 
 @app.route('/api/generate', methods=['POST'])
+@limiter.limit("10 per minute;60 per hour;200 per day")
 def generate_table():
-    # ── 1. Verify API key ──
-    OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
-    if not OPENROUTER_API_KEY:
-        return jsonify({
-            "error": "Server configuration error",
-            "details": "OPENROUTER_API_KEY is not set on the server. Please contact the administrator.",
-            "error_type": "config"
-        }), 500
+    payload = request.get_json(silent=True) or {}
+    error, config = validate_payload(payload)
+    if error:
+        return jsonify({"error": "Invalid request", "details": error, "error_type": "validation"}), 400
 
-    client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=OPENROUTER_API_KEY,
-    )
+    columns = config["columns"]
+    row_count = config["row_count"]
+    seed = config["seed"]
+    text_columns = [c for c in columns if is_text_column(c)]
 
-    # ── 2. Parse request ──
-    config_payload: dict = request.get_json(silent=True) or {}
-    columns = config_payload.get("columns", [])
-    row_count = config_payload.get("rowCount", 5)
-    custom_instructions = config_payload.get("customInstructions", "")
-    distribution_type = config_payload.get("distributionType", "balanced")
+    # ── 1. Semantic text pool: LLM first, curated local pools as fallback ──
+    records, model_used = None, None
+    engine = "statistical"
+    if text_columns:
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        n_records = min(80, max(20, row_count))
+        if api_key:
+            client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
+            prompt = build_semantic_prompt(
+                text_columns, columns, config["template"], config["custom_instructions"], n_records,
+            )
+            records, model_used = fetch_record_pool(client, prompt, text_columns)
+        if records:
+            engine = "hybrid"
+        else:
+            records = build_local_records(text_columns, n_records, seed)
+            engine = "local"
+        # Recombine identities so large row counts don't recycle 80 names
+        records = expand_records(records, text_columns, min(row_count, 1500), seed)
 
-    if not columns:
-        return jsonify({
-            "error": "No columns defined",
-            "details": "Please add at least one column before generating.",
-            "error_type": "validation"
-        }), 400
-
-    # ── 3. Build prompt ──
-    prompt = build_prompt(columns, row_count, custom_instructions, distribution_type)
-
-    # ── 4. Call LLM with fallbacks ──
+    # ── 2. Statistical assembly: exact NaN %, outliers, seeded ──
     try:
-        csv_text, model_used = try_generate(client, prompt)
-        app.logger.info(f"Generated data using model: {model_used}")
-    except APIConnectionError:
-        return jsonify({
-            "error": "Cannot connect to AI service",
-            "details": (
-                "The server cannot reach the OpenRouter API. "
-                "This is likely a network/firewall issue on the server side. "
-                "Please try again in a few moments."
-            ),
-            "error_type": "connection"
-        }), 503
-    except RuntimeError as e:
-        return jsonify({
-            "error": "All AI models are currently unavailable",
-            "details": str(e),
-            "error_type": "model_unavailable"
-        }), 502
+        table, report = generate_dataset(
+            columns, row_count,
+            distribution_type=config["distribution"],
+            seed=seed,
+            text_records=records,
+        )
     except Exception as e:
+        app.logger.exception("Generation failed")
         return jsonify({
             "error": "Unexpected error during generation",
             "details": str(e),
-            "error_type": "unknown"
+            "error_type": "unknown",
         }), 500
 
-    # ── 5. Parse CSV output ──
+    report["engine"] = engine
+    report["model_used"] = model_used
+    report["custom_instructions_applied"] = bool(
+        config["custom_instructions"].strip() and engine == "hybrid"
+    )
+    return jsonify({"status": "ok", "table": table, "report": report}), 200
+
+
+def validate_nlp_payload(payload):
+    """Returns (error_message, None) or (None, cleaned_config)."""
+    task = str(payload.get("task") or "")
+    if task not in NLP_TASKS:
+        return f"Unknown NLP task '{task}'. Choose one of: {', '.join(NLP_TASKS)}.", None
+
     try:
-        parsed_table = parse_csv_output(csv_text, columns)
+        row_count = int(payload.get("rowCount", 100))
+    except (TypeError, ValueError):
+        return "Row count must be a whole number.", None
+    if not (1 <= row_count <= MAX_ROWS):
+        return f"Row count must be between 1 and {MAX_ROWS:,}.", None
+
+    seed = payload.get("seed")
+    if seed is not None and seed != "":
+        try:
+            seed = int(seed) % (2**31)
+        except (TypeError, ValueError):
+            return "Seed must be a whole number.", None
+    else:
+        seed = None
+
+    labels = payload.get("labels") or DEFAULT_LABELS
+    if isinstance(labels, str):
+        labels = [p.strip() for p in labels.split(",")]
+    labels = [str(lb).strip() for lb in labels if str(lb).strip()]
+    deduped, seen = [], set()
+    for lb in labels:
+        if lb.lower() not in seen:
+            seen.add(lb.lower())
+            deduped.append(lb[:24])
+    labels = deduped
+    if task == "classification" and not (2 <= len(labels) <= 6):
+        return "Classification needs between 2 and 6 distinct labels.", None
+
+    try:
+        negative_ratio = float(payload.get("negativeRatio", DEFAULT_NEGATIVE_RATIO))
+    except (TypeError, ValueError):
+        negative_ratio = DEFAULT_NEGATIVE_RATIO
+    negative_ratio = min(max(negative_ratio, 0.1), 0.9)
+
+    return None, {
+        "task": task,
+        "row_count": row_count,
+        "seed": seed,
+        "labels": labels,
+        "negative_ratio": negative_ratio,
+        "custom_instructions": str(payload.get("customInstructions") or "")[:MAX_INSTRUCTIONS_CHARS],
+        "distorted": payload.get("distributionType", "balanced") == "distorted",
+    }
+
+
+@app.route('/api/nlp/generate', methods=['POST'])
+@limiter.limit("10 per minute;60 per hour;200 per day")
+def generate_nlp_table():
+    payload = request.get_json(silent=True) or {}
+    error, config = validate_nlp_payload(payload)
+    if error:
+        return jsonify({"error": "Invalid request", "details": error, "error_type": "validation"}), 400
+
+    task = config["task"]
+    row_count = config["row_count"]
+    seed = config["seed"]
+
+    # ── 1. Example pool: LLM first, offline template banks as fallback ──
+    pool, model_used = None, None
+    api_key = os.environ.get("OPENROUTER_API_KEY")
+    n_pool = min(60, max(20, row_count // 4))
+    if api_key:
+        client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
+        prompt = build_nlp_prompt(task, n_pool, config["labels"], config["custom_instructions"])
+        pseudo_columns = [{"name": k} for k in POOL_KEYS[task]]
+        pool, model_used = fetch_record_pool(client, prompt, pseudo_columns)
+    engine = "hybrid" if pool else "local"
+    if not pool:
+        pool = build_offline_pool(task, max(n_pool, min(row_count, 600)), config["labels"], seed)
+
+    # ── 2. Assembly: exact class balance, negative ratio, label noise ──
+    try:
+        table, report = generate_nlp_dataset(
+            task, row_count,
+            distorted=config["distorted"],
+            seed=seed,
+            pool=pool,
+            labels=config["labels"],
+            negative_ratio=config["negative_ratio"],
+        )
     except Exception as e:
+        app.logger.exception("NLP generation failed")
         return jsonify({
-            "error": "Failed to parse model output",
+            "error": "Unexpected error during generation",
             "details": str(e),
-            "raw": csv_text[:500],  # First 500 chars for debugging
-            "error_type": "parse"
+            "error_type": "unknown",
         }), 500
 
-    if not parsed_table:
-        return jsonify({
-            "error": "Model returned empty data",
-            "details": "The AI generated a response but no valid rows could be extracted. Try again.",
-            "raw": csv_text[:500],
-            "error_type": "empty"
-        }), 500
-
-    return jsonify({"status": "ok", "table": parsed_table}), 200
+    report["engine"] = engine
+    report["model_used"] = model_used
+    report["custom_instructions_applied"] = bool(
+        config["custom_instructions"].strip() and engine == "hybrid"
+    )
+    return jsonify({"status": "ok", "table": table, "report": report}), 200
 
 
 if __name__ == "__main__":

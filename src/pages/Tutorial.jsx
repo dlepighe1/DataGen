@@ -15,7 +15,7 @@ const Tutorial = () => {
   const steps = [
     {
       title: 'Navigate to Generate Page',
-      description: "Click on the 'Generate' item in the top‑nav to open your workspace.",
+      description: "Click on the 'Generate' item in the top-nav to open your workspace.",
       icon: Database,
       details:
         'The Generate page is where you configure columns, tweak parameters, preview results and export datasets.'
@@ -25,35 +25,35 @@ const Tutorial = () => {
       description: 'Use the tabs in the Dataset Configuration card to switch between Manual Setup and Templates.',
       icon: Wand2,
       details:
-        'Manual Setup lets you build a schema from scratch, whereas Templates instantly preload common schemas such as E‑commerce, Finance, Healthcare, Education, Marketing and IoT.'
+        'Manual Setup lets you build a schema from scratch, whereas Templates instantly preload common schemas such as E-commerce, Finance, Healthcare, Education, Marketing and IoT.'
     },
     {
       title: 'Load a Template (optional)',
       description: "If you chose 'Templates', pick one from the dropdown and click ‘Load Template’.",
       icon: Wand2,
       details:
-        'The Columns panel will be auto‑filled. You can still edit, add or remove columns afterwards.'
+        'The Columns panel will be auto-filled. You can still edit, add or remove columns afterwards.'
     },
     {
       title: 'Add or Adjust Columns',
       description: "Type one or more column names and hit the plus icon, or edit existing columns in the 'Column Settings' panel.",
       icon: Plus,
       details:
-        'For each column you can set its data type, numeric range, missing‑value percentage, noise level, outlier percentage and more.'
+        'For each column you can set its data type, numeric range, missing-value percentage, noise level, outlier percentage and more.'
     },
     {
-      title: 'Fine‑tune Global Settings',
+      title: 'Fine-tune Global Settings',
       description: 'Set the number of rows, choose a distribution type (Balanced or Distorted) and add any custom instructions.',
       icon: Settings,
       details:
-        'Balanced data keeps values tidy; Distorted intentionally introduces noise for data‑cleaning practice. The row counter accepts 1 – 10 000.'
+        'Balanced data keeps values tidy; Distorted intentionally introduces noise for data-cleaning practice. The row counter accepts 1 to 10,000.'
     },
     {
       title: 'Generate Your Data',
       description: 'Click the “Generate Data” button and wait a few seconds while the API builds your dataset.',
       icon: ArrowRightCircle,
       details:
-        'The button shows a spinner while processing. If something goes wrong you will receive an in‑app toast with diagnostic info.'
+        'The button shows a spinner while processing. If something goes wrong you will receive an in-app toast with diagnostic info.'
     },
     {
       title: 'Preview the Result',
@@ -67,7 +67,7 @@ const Tutorial = () => {
       description: 'Choose CSV, JSON or TXT and your file will start downloading immediately.',
       icon: Download,
       details:
-        'CSV works best for spreadsheets, JSON for web/dev projects, and TXT for plain‑text review.'
+        'CSV works best for spreadsheets, JSON for web/dev projects, and TXT for plain-text review.'
     }
   ];
 
@@ -78,7 +78,7 @@ const Tutorial = () => {
         {/* Header */}
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-gradient mb-4">
-            How to Use DataGen AI
+            How to Use DataGen AI
           </h1>
           <p className="text-xl text-slate-400">
             Follow these quick steps to craft realistic, custom datasets
@@ -120,32 +120,32 @@ const Tutorial = () => {
             <Wand2 className="h-6 w-6 text-sky-400" /> Pro Tips
           </h2>
           <div className="grid md:grid-cols-2 gap-8 text-left relative z-10">
-            {/* Tip 1 */}
+            {/* Tip 1 */}
             <div>
-              <h3 className="font-semibold mb-2 text-sky-300 text-lg">Template Quick‑Start</h3>
+              <h3 className="font-semibold mb-2 text-sky-300 text-lg">Template Quick-Start</h3>
               <p className="text-[15px] text-slate-400 leading-relaxed max-w-sm">
                 Not sure where to begin? Load a template and tweak it instead of building a schema from scratch.
               </p>
             </div>
-            {/* Tip 2 */}
+            {/* Tip 2 */}
             <div>
-              <h3 className="font-semibold mb-2 text-indigo-300 text-lg">Column Fine‑Tuning</h3>
+              <h3 className="font-semibold mb-2 text-indigo-300 text-lg">Column Fine-Tuning</h3>
               <p className="text-[15px] text-slate-400 leading-relaxed max-w-sm">
-                Use sliders to inject missing values, noise or outliers — perfect for testing data‑cleaning pipelines.
+                Use sliders to inject missing values, noise or outliers. It is a great way to test your data-cleaning pipelines.
               </p>
             </div>
-            {/* Tip 3 */}
+            {/* Tip 3 */}
             <div>
               <h3 className="font-semibold mb-2 text-purple-300 text-lg">Row Limits</h3>
               <p className="text-[15px] text-slate-400 leading-relaxed max-w-sm">
-                Generate up to 10 000 rows in one go. Need more? Run multiple batches and merge them.
+                Generate up to 10 000 rows in one go. Need more? Run multiple batches and merge them.
               </p>
             </div>
-            {/* Tip 4 */}
+            {/* Tip 4 */}
             <div>
               <h3 className="font-semibold mb-2 text-teal-300 text-lg">Distribution Strategy</h3>
               <p className="text-[15px] text-slate-400 leading-relaxed max-w-sm">
-                Switch to ‘Distorted’ to simulate dirty, real‑world data and stress‑test your ML workflows.
+                Switch to ‘Distorted’ to simulate dirty, real-world data and stress-test your ML workflows.
               </p>
             </div>
           </div>

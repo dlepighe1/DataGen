@@ -1,12 +1,23 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { gsap } from 'gsap';
-import { Download, FileText, Database, Settings, Wand2, Plus, Trash2, AlertTriangle, WifiOff, ServerCrash, RefreshCw } from 'lucide-react';
+import {
+  Download, FileText, Database, Settings, Wand2, Plus, Trash2, AlertTriangle,
+  WifiOff, ServerCrash, RefreshCw, ChevronDown, ChevronLeft, ChevronRight,
+  ChevronsLeft, ChevronsRight, ClipboardCheck, Timer, Braces, Brain, Hash,
+  Cpu, CheckCircle2, Layers,
+} from 'lucide-react';
 import { Input } from '../components/UI/Input';
 import { Slider } from '../components/UI/Slider';
 import { Switch } from '../components/UI/Switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/UI/Select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/UI/Tabs';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '../components/UI/Dropdown-menu';
 import { toast } from '../components/Use-toast';
+
+const MAX_ROWS = 10000;
+const PAGE_SIZE = 10;
 
 /* ── Small helper: section label ── */
 function SectionLabel({ children }) {
@@ -17,13 +28,175 @@ function SectionLabel({ children }) {
   );
 }
 
+/* ── CSV-safe value: quote fields containing commas, quotes or newlines ── */
+function escapeCsvValue(value) {
+  if (value == null) return '';
+  const s = String(value);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/* ════════ Quality Report building blocks ════════ */
+
+const LABEL_PALETTE = ['#38bdf8', '#818cf8', '#c084fc', '#f472b6', '#fbbf24', '#34d399'];
+
+const TYPE_CHIP_STYLES = {
+  number:  { color: '#7dd3fc', background: 'rgba(14,165,233,0.14)',  border: '1px solid rgba(56,189,248,0.3)' },
+  string:  { color: '#a5b4fc', background: 'rgba(99,102,241,0.14)',  border: '1px solid rgba(99,102,241,0.3)' },
+  text:    { color: '#a5b4fc', background: 'rgba(99,102,241,0.14)',  border: '1px solid rgba(99,102,241,0.3)' },
+  date:    { color: '#d8b4fe', background: 'rgba(168,85,247,0.14)',  border: '1px solid rgba(168,85,247,0.3)' },
+  boolean: { color: '#6ee7b7', background: 'rgba(52,211,153,0.14)',  border: '1px solid rgba(52,211,153,0.3)' },
+  email:   { color: '#f9a8d4', background: 'rgba(244,114,182,0.14)', border: '1px solid rgba(244,114,182,0.3)' },
+  label:   { color: '#fcd34d', background: 'rgba(251,191,36,0.14)',  border: '1px solid rgba(251,191,36,0.3)' },
+};
+
+function MetaChip({ icon, label, value, accent = '#7dd3fc' }) {
+  const Icon = icon;
+  return (
+    <div
+      className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs"
+      style={{ background: 'rgba(15,23,52,0.7)', border: '1px solid rgba(56,189,248,0.16)' }}
+    >
+      <Icon className="h-3.5 w-3.5" style={{ color: accent }} />
+      <span className="text-slate-500">{label}</span>
+      <span className="font-semibold" style={{ color: accent }}>{value}</span>
+    </div>
+  );
+}
+
+function LabelDistributionBar({ distribution }) {
+  const entries = Object.entries(distribution);
+  const total = entries.reduce((sum, [, n]) => sum + n, 0) || 1;
+  return (
+    <div className="space-y-2.5">
+      <div className="flex h-3 rounded-full overflow-hidden" style={{ background: 'rgba(15,23,52,0.8)' }}>
+        {entries.map(([label, count], i) => (
+          <div
+            key={label}
+            title={`${label}: ${count}`}
+            style={{
+              width: `${(count / total) * 100}%`,
+              background: `linear-gradient(180deg, ${LABEL_PALETTE[i % LABEL_PALETTE.length]}, ${LABEL_PALETTE[i % LABEL_PALETTE.length]}99)`,
+              boxShadow: `0 0 10px ${LABEL_PALETTE[i % LABEL_PALETTE.length]}40`,
+            }}
+          />
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+        {entries.map(([label, count], i) => (
+          <span key={label} className="flex items-center gap-1.5 text-xs text-slate-400">
+            <span className="w-2 h-2 rounded-full" style={{ background: LABEL_PALETTE[i % LABEL_PALETTE.length] }} />
+            <span className="text-slate-300 font-medium">{label}</span>
+            <span className="text-slate-500">{count.toLocaleString()} ({Math.round((count / total) * 100)}%)</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ReportColumnCard({ col }) {
+  const chipStyle = TYPE_CHIP_STYLES[col.type] || TYPE_CHIP_STYLES.string;
+  const missingMatches = col.requested_missing_pct != null
+    && col.actual_missing_pct === col.requested_missing_pct;
+  return (
+    <div
+      className="rounded-xl p-3.5 space-y-2.5 transition-all duration-200 hover:-translate-y-0.5"
+      style={{
+        background: 'linear-gradient(160deg, rgba(15,23,52,0.85), rgba(10,16,38,0.75))',
+        border: '1px solid rgba(56,189,248,0.12)',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
+      }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-semibold text-slate-100 truncate">{col.name}</span>
+        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full flex-shrink-0" style={chipStyle}>
+          {col.type}
+        </span>
+      </div>
+
+      {col.requested_missing_pct != null && (
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-500">Missing values</span>
+            <span className="flex items-center gap-1">
+              <span className="text-slate-400">{col.requested_missing_pct}%</span>
+              <span className="text-slate-600">→</span>
+              <span className={missingMatches ? 'text-emerald-400 font-semibold' : 'text-amber-400 font-semibold'}>
+                {col.actual_missing_pct}%
+              </span>
+              {missingMatches && <CheckCircle2 className="h-3 w-3 text-emerald-400" />}
+            </span>
+          </div>
+          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(30,41,72,0.9)' }}>
+            <div
+              className="h-full rounded-full"
+              style={{
+                width: `${Math.min(col.actual_missing_pct * 2, 100)}%`,
+                background: 'linear-gradient(90deg, #0ea5e9, #6366f1)',
+                boxShadow: '0 0 8px rgba(14,165,233,0.5)',
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {col.requested_range && (
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-slate-500">Range</span>
+          <span className="text-slate-300">
+            [{col.requested_range[0]}, {col.requested_range[1]}]
+            {col.actual_range && (
+              <span className="text-slate-500"> → [{col.actual_range[0]}, {col.actual_range[1]}]</span>
+            )}
+          </span>
+        </div>
+      )}
+
+      {col.avg_chars != null && (
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-slate-500">Avg length</span>
+          <span className="text-slate-300">{col.avg_chars} chars</span>
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 pt-0.5">
+        <span
+          className="text-[11px] px-2 py-0.5 rounded-md"
+          style={{ background: 'rgba(56,189,248,0.1)', color: '#7dd3fc', border: '1px solid rgba(56,189,248,0.2)' }}
+        >
+          {col.unique_values?.toLocaleString()} unique
+        </span>
+        {col.outliers_injected > 0 && (
+          <span
+            className="text-[11px] px-2 py-0.5 rounded-md"
+            style={{ background: 'rgba(168,85,247,0.12)', color: '#d8b4fe', border: '1px solid rgba(168,85,247,0.25)' }}
+          >
+            {col.outliers_injected} outliers
+          </span>
+        )}
+        {col.mean != null && (
+          <span className="text-[11px] text-slate-500 ml-auto">μ {col.mean} · σ {col.std}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const Generate = () => {
   const [columns, setColumns] = useState([]);
   const [newColumnName, setNewColumnName] = useState('');
   const [rowCount, setRowCount] = useState(100);
+  const [seed, setSeed] = useState('');
   const [customInstructions, setCustomInstructions] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [generatedData, setGeneratedData] = useState([]);
+  const [resultColumns, setResultColumns] = useState([]);
+  const [nlpTask, setNlpTask] = useState('retrieval');
+  const [nlpLabels, setNlpLabels] = useState('positive, negative, neutral');
+  const [negativeRatio, setNegativeRatio] = useState(50);
+  const [report, setReport] = useState(null);
+  const [showReport, setShowReport] = useState(false);
+  const [page, setPage] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState(null); // { type, title, message }
   const [activeTab, setActiveTab] = useState('manual');
@@ -49,6 +222,13 @@ const Generate = () => {
     { value: 'sports',      label: 'Athlete Stats',            description: 'Match performance, cards, goals, and injuries' },
     { value: 'videogames',  label: 'Game Analytics',           description: 'Session metrics, levels, purchases, and rewards' },
     { value: 'marketing',   label: 'Marketing Analytics',      description: 'Campaign performance, user engagement, and conversions' },
+  ];
+
+  const nlpTaskOptions = [
+    { value: 'retrieval',      label: 'Search & Retrieval',   description: 'Query and passage pairs with relevance labels for semantic search and ranking models' },
+    { value: 'classification', label: 'Text Classification',  description: 'Short texts with class labels such as sentiment, intent, spam, or your own classes' },
+    { value: 'qa',             label: 'Question Answering',   description: 'Context passages with questions and extractive answers' },
+    { value: 'pairs',          label: 'Paraphrase Pairs',     description: 'Sentence pairs labeled as paraphrase or not, for similarity and embedding models' },
   ];
 
   const addColumn = () => {
@@ -168,8 +348,10 @@ const Generate = () => {
     }
   };
 
+  const isNlpMode = activeTab === 'nlp';
+
   const generateData = async () => {
-    if (!columns.length) {
+    if (!isNlpMode && !columns.length) {
       toast({ title: 'No columns defined', description: 'Add at least one column first.', variant: 'destructive' });
       return;
     }
@@ -180,13 +362,32 @@ const Generate = () => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 120_000);
 
-    const configPayload = { rowCount, distributionType, customInstructions, template: selectedTemplate, columns };
+    const clampedRows = Math.min(Math.max(1, rowCount || 1), MAX_ROWS);
+    const endpoint = isNlpMode ? '/api/nlp/generate' : '/api/generate';
+    const configPayload = isNlpMode
+      ? {
+          task: nlpTask,
+          rowCount: clampedRows,
+          seed: seed === '' ? null : Number(seed),
+          distributionType,
+          customInstructions,
+          labels: nlpLabels,
+          negativeRatio: negativeRatio / 100,
+        }
+      : {
+          rowCount: clampedRows,
+          seed: seed === '' ? null : Number(seed),
+          distributionType,
+          customInstructions,
+          template: selectedTemplate,
+          columns,
+        };
 
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
       let resp;
       try {
-        resp = await fetch(`${API_URL}/api/generate`, {
+        resp = await fetch(`${API_URL}${endpoint}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(configPayload),
@@ -198,7 +399,7 @@ const Generate = () => {
           setGenerateError({
             type: 'timeout',
             title: 'Request Timed Out',
-            message: 'The request took too long (over 2 minutes). The AI model may be overloaded. Please try again.',
+            message: 'The request took too long (over 2 minutes). The server may be overloaded. Please try again.',
           });
         } else {
           setGenerateError({
@@ -216,7 +417,19 @@ const Generate = () => {
         const errType = data.error_type || 'unknown';
         const errDetails = data.details || data.error || 'An unknown error occurred.';
 
-        if (errType === 'connection' || resp.status === 503) {
+        if (errType === 'rate_limited' || resp.status === 429) {
+          setGenerateError({
+            type: 'rate_limited',
+            title: 'Slow Down a Little',
+            message: errDetails,
+          });
+        } else if (errType === 'validation' || resp.status === 400) {
+          setGenerateError({
+            type: 'error',
+            title: 'Invalid Configuration',
+            message: errDetails,
+          });
+        } else if (errType === 'connection' || resp.status === 503) {
           setGenerateError({
             type: 'connection',
             title: 'AI Service Unreachable',
@@ -226,7 +439,7 @@ const Generate = () => {
           setGenerateError({
             type: 'model',
             title: 'AI Models Unavailable',
-            message: errDetails + ' This is usually temporary — please try again in a moment.',
+            message: errDetails + ' This is usually temporary, so please try again in a moment.',
           });
         } else if (errType === 'config' || resp.status === 500) {
           setGenerateError({
@@ -246,6 +459,10 @@ const Generate = () => {
 
       if (data.status === 'ok' && Array.isArray(data.table)) {
         setGeneratedData(data.table);
+        setResultColumns(Object.keys(data.table[0] || {}));
+        setReport(data.report || null);
+        setPage(0);
+        setShowReport(false);
         toast({ title: '✅ Data Generated!', description: `Loaded ${data.table.length} rows.` });
       } else {
         setGenerateError({
@@ -265,18 +482,21 @@ const Generate = () => {
       toast({ title: 'No Data to Download', description: 'Generate data first.', variant: 'destructive' });
       return;
     }
+    const cols = resultColumns.length > 0 ? resultColumns : Object.keys(generatedData[0] || {});
     let content, filename, mimeType;
     switch (format) {
       case 'csv': {
-        const cols = columns.length > 0 ? columns.map(c => c.name) : Object.keys(generatedData[0] || {});
-        content = [cols.join(','), ...generatedData.map(r => cols.map(n => r[n] ?? '').join(','))].join('\n');
+        content = [
+          cols.map(escapeCsvValue).join(','),
+          ...generatedData.map(r => cols.map(n => escapeCsvValue(r[n])).join(',')),
+        ].join('\n');
         filename = 'data.csv'; mimeType = 'text/csv'; break;
       }
       case 'json':
         content = JSON.stringify(generatedData, null, 2);
         filename = 'data.json'; mimeType = 'application/json'; break;
       case 'txt':
-        content = generatedData.map(r => columns.map(c => `${c.name}: ${r[c.name] ?? 'N/A'}`).join(' | ')).join('\n');
+        content = generatedData.map(r => cols.map(n => `${n}: ${r[n] ?? 'N/A'}`).join(' | ')).join('\n');
         filename = 'data.txt'; mimeType = 'text/plain'; break;
     }
     const blob = new Blob([content], { type: mimeType });
@@ -286,10 +506,23 @@ const Generate = () => {
     toast({ title: 'Download Started', description: filename });
   };
 
-  /* derive column list for table rendering */
-  const tableCols = columns.length > 0
-    ? columns
-    : Object.keys(generatedData[0] || {}).map(name => ({ name }));
+  /* derive column list for table rendering from the generated result */
+  const tableCols = (resultColumns.length > 0
+    ? resultColumns
+    : Object.keys(generatedData[0] || {})
+  ).map(name => ({ name }));
+
+  /* pagination */
+  const totalPages = Math.max(1, Math.ceil(generatedData.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages - 1);
+  const pageRows = generatedData.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
+
+  const pagerButtonClass = enabled => [
+    'p-1.5 rounded-lg transition-all duration-150',
+    enabled
+      ? 'text-sky-300 hover:bg-sky-500/15 hover:text-sky-200 active:scale-90'
+      : 'text-slate-700 cursor-not-allowed',
+  ].join(' ');
 
   return (
     <div className="min-h-[calc(100vh-64px)] py-8 px-4 relative z-10">
@@ -322,6 +555,7 @@ const Generate = () => {
                 <TabsList className="w-full mb-5">
                   <TabsTrigger value="manual">Manual Setup</TabsTrigger>
                   <TabsTrigger value="template">Templates</TabsTrigger>
+                  <TabsTrigger value="nlp">NLP Tasks</TabsTrigger>
                 </TabsList>
 
                 {/* ── Templates Tab ── */}
@@ -345,7 +579,7 @@ const Generate = () => {
                     )}
                   </div>
 
-                  {/* Load Template button — prominent, full-width */}
+                  {/* Load Template button, prominent and full-width */}
                   <button
                     onClick={generateFromTemplate}
                     disabled={!selectedTemplate}
@@ -387,20 +621,104 @@ const Generate = () => {
                     </div>
                   </div>
                 </TabsContent>
+
+                {/* ── NLP Tasks Tab ── */}
+                <TabsContent value="nlp" className="space-y-5">
+                  <div>
+                    <SectionLabel>NLP Task</SectionLabel>
+                    <Select value={nlpTask} onValueChange={setNlpTask}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {nlpTaskOptions.map(t => (
+                          <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-sky-400/80 mt-2 pl-1">
+                      {nlpTaskOptions.find(t => t.value === nlpTask)?.description}
+                    </p>
+                  </div>
+
+                  {nlpTask === 'classification' && (
+                    <div>
+                      <SectionLabel>Class Labels</SectionLabel>
+                      <Input
+                        value={nlpLabels}
+                        onChange={e => setNlpLabels(e.target.value)}
+                        placeholder="positive, negative, neutral"
+                      />
+                      <p className="text-xs text-slate-500 mt-1.5 pl-1">
+                        Enter 2 to 6 comma-separated labels. Balanced mode splits classes exactly evenly.
+                      </p>
+                    </div>
+                  )}
+
+                  {(nlpTask === 'retrieval' || nlpTask === 'pairs') && (
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <SectionLabel>Negative Examples</SectionLabel>
+                        <span className="text-xs font-mono font-semibold text-indigo-400 bg-indigo-400/10 px-2 py-0.5 rounded-md border border-indigo-400/20">
+                          {negativeRatio}%
+                        </span>
+                      </div>
+                      <Slider
+                        value={[negativeRatio]}
+                        onValueChange={v => setNegativeRatio(v[0])}
+                        min={10}
+                        max={90}
+                        step={5}
+                      />
+                      <p className="text-xs text-slate-500 mt-2 pl-1">
+                        {nlpTask === 'retrieval'
+                          ? 'Share of query and passage pairs that are not relevant, useful as hard training negatives.'
+                          : 'Share of sentence pairs that are not paraphrases.'}
+                      </p>
+                    </div>
+                  )}
+
+                  <div
+                    className="flex items-start gap-2.5 rounded-lg p-3 text-xs leading-relaxed"
+                    style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)' }}
+                  >
+                    <Brain className="h-4 w-4 text-indigo-400 flex-shrink-0 mt-0.5" />
+                    <span className="text-slate-400">
+                      The AI engine writes a pool of unique examples for your domain (set it in
+                      Custom Instructions below); class balance, negative ratios, and label noise
+                      are then enforced exactly by the statistical engine.
+                    </span>
+                  </div>
+                </TabsContent>
               </Tabs>
 
               {/* ── Shared fields below tabs ── */}
               <div className="mt-6 space-y-5">
-                <div>
-                  <SectionLabel>Number of Rows</SectionLabel>
-                  <Input
-                    id="row-count"
-                    type="number"
-                    value={rowCount}
-                    onChange={e => setRowCount(+e.target.value)}
-                    min="1"
-                    max="10000"
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <SectionLabel>Number of Rows</SectionLabel>
+                    <Input
+                      id="row-count"
+                      type="number"
+                      value={rowCount}
+                      onChange={e => setRowCount(+e.target.value)}
+                      onBlur={() => setRowCount(Math.min(Math.max(1, rowCount || 1), MAX_ROWS))}
+                      min="1"
+                      max={MAX_ROWS}
+                    />
+                    <p className="text-xs text-slate-500 mt-1.5 pl-1">Up to {MAX_ROWS.toLocaleString()} rows</p>
+                  </div>
+                  <div>
+                    <SectionLabel>Seed (Optional)</SectionLabel>
+                    <Input
+                      id="seed"
+                      type="number"
+                      value={seed}
+                      onChange={e => setSeed(e.target.value)}
+                      placeholder="Random"
+                    />
+                    <p className="text-xs text-slate-500 mt-1.5 pl-1">Same seed gives the same dataset</p>
+                  </div>
                 </div>
 
                 <div>
@@ -417,7 +735,9 @@ const Generate = () => {
                   <p className="text-xs text-sky-400/75 mt-2 pl-1">
                     {distributionType === 'balanced'
                       ? '⚖️  Well-balanced data for standard training'
-                      : '📡  Noisy, distorted data for data cleaning practice'}
+                      : isNlpMode
+                        ? '📡  Skewed classes, label noise, and dirty text for robustness practice'
+                        : '📡  Noisy, distorted data for data cleaning practice'}
                   </p>
                 </div>
 
@@ -427,7 +747,10 @@ const Generate = () => {
                     id="custom-instructions"
                     value={customInstructions}
                     onChange={e => setCustomInstructions(e.target.value)}
-                    placeholder="Any special requirements or patterns you want in the data…"
+                    maxLength={600}
+                    placeholder={isNlpMode
+                      ? 'Describe the domain, e.g. "medical research abstracts" or "e-commerce product search"…'
+                      : 'Shape the text content, e.g. "All customers are from Chicago" or "Products are vintage vinyl records"…'}
                     rows={3}
                     className={[
                       'w-full resize-none rounded-lg px-3 py-2.5 text-sm',
@@ -438,12 +761,17 @@ const Generate = () => {
                       'focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20',
                     ].join(' ')}
                   />
+                  <p className="text-xs text-slate-500 mt-1 pl-1">
+                    {isNlpMode
+                      ? 'Sets the domain for the generated examples (queries, passages, texts…)'
+                      : 'Applied by the AI engine to text columns (names, categories, descriptions…)'}
+                  </p>
                 </div>
               </div>
             </div>
 
-            {/* 2. Column Settings Card */}
-            {columns.length > 0 && (
+            {/* 2. Column Settings Card (tabular modes only) */}
+            {!isNlpMode && columns.length > 0 && (
               <div className="glass-panel p-6">
                 <h2 className="text-xl font-bold text-white mb-5 flex items-center gap-2">
                   <Settings className="h-5 w-5 text-sky-400 flex-shrink-0" />
@@ -618,8 +946,8 @@ const Generate = () => {
               </div>
             )}
 
-            {/* 3. Generate & Download Card */}
-            <div className="glass-panel p-6 space-y-4">
+            {/* 3. Generate Card */}
+            <div className="glass-panel p-6">
               <button
                 onClick={generateData}
                 disabled={isGenerating}
@@ -644,56 +972,70 @@ const Generate = () => {
                   </>
                 )}
               </button>
-
-              {generatedData.length > 0 && (
-                <div>
-                  <SectionLabel>Download As</SectionLabel>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { fmt: 'csv',  icon: <Download className="h-4 w-4" />, label: 'CSV'  },
-                      { fmt: 'json', icon: <FileText  className="h-4 w-4" />, label: 'JSON' },
-                      { fmt: 'txt',  icon: <FileText  className="h-4 w-4" />, label: 'TXT'  },
-                    ].map(({ fmt, icon, label }) => (
-                      <button
-                        key={fmt}
-                        onClick={() => downloadData(fmt)}
-                        className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-semibold text-sky-300 border-2 border-sky-500/50 bg-sky-500/10 hover:bg-sky-500/20 hover:border-sky-400 hover:text-sky-200 transition-all duration-200 active:scale-95"
-                      >
-                        {icon}
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
           </div>{/* end left col */}
 
-          {/* ══════════ RIGHT COLUMN — Preview ══════════ */}
+          {/* ══════════ RIGHT COLUMN: Preview ══════════ */}
           <div className="glass-panel overflow-hidden self-start">
 
             {/* Panel header */}
             <div
-              className="px-5 py-4 flex items-center justify-between"
+              className="px-5 py-4 flex items-center justify-between gap-3"
               style={{ borderBottom: '1px solid rgba(56,189,248,0.18)', background: 'rgba(9,14,35,0.7)' }}
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 min-w-0">
                 <div
                   className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
                   style={{ background: 'linear-gradient(135deg,#0ea5e9,#6366f1)', boxShadow: '0 0 12px rgba(14,165,233,0.4)' }}
                 >
                   <Database className="h-4 w-4 text-white" />
                 </div>
-                <span className="font-semibold text-slate-100 text-base">Generated Data Preview</span>
+                <span className="font-semibold text-slate-100 text-base truncate">Generated Data Preview</span>
               </div>
+
               {generatedData.length > 0 && (
-                <span
-                  className="text-xs px-3 py-1 rounded-full font-bold tracking-wide"
-                  style={{ background: 'rgba(56,189,248,0.12)', color: '#7dd3fc', border: '1px solid rgba(56,189,248,0.25)' }}
-                >
-                  {generatedData.length} rows
-                </span>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span
+                    className="text-xs px-3 py-1 rounded-full font-bold tracking-wide"
+                    style={{ background: 'rgba(56,189,248,0.12)', color: '#7dd3fc', border: '1px solid rgba(56,189,248,0.25)' }}
+                  >
+                    {generatedData.length.toLocaleString()} rows
+                  </span>
+
+                  {/* Export dropdown, labeled and next to the data it acts on */}
+                  <DropdownMenu modal={false}>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-sky-300 border border-sky-500/50 bg-sky-500/10 hover:bg-sky-500/20 hover:border-sky-400 hover:text-sky-200 transition-all duration-200 active:scale-95 outline-none"
+                        title="Export dataset"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        Export
+                        <ChevronDown className="h-3 w-3 opacity-70" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      className="min-w-[10rem] rounded-xl border-slate-700/80 bg-[rgba(10,18,40,0.97)] text-slate-200 shadow-2xl shadow-black/60 backdrop-blur-xl p-1.5"
+                    >
+                      {[
+                        { fmt: 'csv',  icon: <Download className="h-4 w-4 text-sky-400" />,    label: 'Export as CSV'  },
+                        { fmt: 'json', icon: <Braces   className="h-4 w-4 text-indigo-400" />, label: 'Export as JSON' },
+                        { fmt: 'txt',  icon: <FileText className="h-4 w-4 text-purple-400" />, label: 'Export as TXT'  },
+                      ].map(({ fmt, icon, label }) => (
+                        <DropdownMenuItem
+                          key={fmt}
+                          onSelect={() => downloadData(fmt)}
+                          className="gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer text-sm focus:bg-sky-500/20 focus:text-sky-100"
+                        >
+                          {icon}
+                          {label}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               )}
             </div>
 
@@ -706,7 +1048,7 @@ const Generate = () => {
                   />
                   <div className="text-center space-y-1">
                     <p className="text-sm font-medium text-sky-400/80 animate-pulse">Generating your dataset…</p>
-                    <p className="text-xs text-slate-500">This may take up to 90 seconds</p>
+                    <p className="text-xs text-slate-500">Usually just a few seconds, though the AI step can take up to 30 seconds</p>
                   </div>
                 </div>
               ) : generateError ? (
@@ -721,11 +1063,12 @@ const Generate = () => {
                         ? '1px solid rgba(239,68,68,0.25)' : '1px solid rgba(234,179,8,0.25)',
                     }}
                   >
-                    {generateError.type === 'connection' && <WifiOff className="h-8 w-8 text-red-400" />}
-                    {generateError.type === 'model'      && <ServerCrash className="h-8 w-8 text-amber-400" />}
-                    {generateError.type === 'timeout'    && <RefreshCw className="h-8 w-8 text-red-400" />}
-                    {generateError.type === 'config'     && <ServerCrash className="h-8 w-8 text-amber-400" />}
-                    {generateError.type === 'error'      && <AlertTriangle className="h-8 w-8 text-amber-400" />}
+                    {generateError.type === 'connection'   && <WifiOff className="h-8 w-8 text-red-400" />}
+                    {generateError.type === 'model'        && <ServerCrash className="h-8 w-8 text-amber-400" />}
+                    {generateError.type === 'timeout'      && <RefreshCw className="h-8 w-8 text-red-400" />}
+                    {generateError.type === 'config'       && <ServerCrash className="h-8 w-8 text-amber-400" />}
+                    {generateError.type === 'rate_limited' && <Timer className="h-8 w-8 text-amber-400" />}
+                    {generateError.type === 'error'        && <AlertTriangle className="h-8 w-8 text-amber-400" />}
                   </div>
 
                   <div className="space-y-2 max-w-xs">
@@ -743,6 +1086,18 @@ const Generate = () => {
                       <p className="text-slate-400">1. Is the backend running? Run <code className="text-sky-400 bg-slate-800 px-1 rounded">python app.py</code></p>
                       <p className="text-slate-400">2. Check <code className="text-sky-400 bg-slate-800 px-1 rounded">VITE_API_URL</code> in your <code className="text-sky-400 bg-slate-800 px-1 rounded">.env</code></p>
                       <p className="text-slate-400">3. Make sure port 8000 is not blocked</p>
+                    </div>
+                  )}
+
+                  {generateError.type === 'rate_limited' && (
+                    <div
+                      className="text-left text-xs rounded-lg p-3 w-full max-w-xs"
+                      style={{ background: 'rgba(234,179,8,0.07)', border: '1px solid rgba(234,179,8,0.15)' }}
+                    >
+                      <p className="text-amber-400/80">
+                        Generation is rate-limited to keep the service free for everyone.
+                        Wait a moment and try again. Your configuration is preserved.
+                      </p>
                     </div>
                   )}
 
@@ -770,94 +1125,211 @@ const Generate = () => {
                     <Database className="h-8 w-8 text-sky-500/50" />
                   </div>
                   <p className="text-sm text-slate-500 max-w-52 leading-relaxed">
-                    Configure your columns and click{' '}
+                    {isNlpMode ? 'Pick an NLP task' : 'Configure your columns'} and click{' '}
                     <strong className="text-sky-400 font-semibold">Generate Data</strong>
                     {' '}to see a preview here.
                   </p>
                 </div>
               ) : (
-                <div ref={tableRef} className="overflow-x-auto rounded-xl custom-scrollbar" style={{ opacity: 0 }}>
-                  <table className="w-full text-sm" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
-                    <thead>
-                      <tr style={{ background: 'rgba(5,12,35,0.85)' }}>
-                        {tableCols.map((c, i) => (
-                          <th
-                            key={i}
-                            className="px-4 py-3 text-left font-semibold whitespace-nowrap"
-                            style={{ borderBottom: '1px solid rgba(56,189,248,0.18)' }}
-                          >
-                            <span
-                              className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold tracking-wide"
-                              style={{
-                                background: i % 3 === 0
-                                  ? 'rgba(14,165,233,0.18)'
-                                  : i % 3 === 1
-                                    ? 'rgba(99,102,241,0.18)'
-                                    : 'rgba(168,85,247,0.18)',
-                                color: i % 3 === 0 ? '#7dd3fc' : i % 3 === 1 ? '#a5b4fc' : '#d8b4fe',
-                                border: `1px solid ${i % 3 === 0 ? 'rgba(56,189,248,0.3)' : i % 3 === 1 ? 'rgba(99,102,241,0.3)' : 'rgba(168,85,247,0.3)'}`,
-                              }}
+                <div ref={tableRef} style={{ opacity: 0 }}>
+                  {/* Horizontally scrollable table */}
+                  <div className="overflow-x-auto rounded-xl custom-scrollbar">
+                    <table className="w-full text-sm" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+                      <thead>
+                        <tr style={{ background: 'rgba(5,12,35,0.85)' }}>
+                          {tableCols.map((c, i) => (
+                            <th
+                              key={i}
+                              className="px-4 py-3 text-left font-semibold whitespace-nowrap"
+                              style={{ borderBottom: '1px solid rgba(56,189,248,0.18)' }}
                             >
-                              {c.name}
-                            </span>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {generatedData.slice(0, 25).map((row, r) => (
-                        <tr
-                          key={r}
-                          style={{
-                            background: r % 2 === 0 ? 'rgba(255,255,255,0.022)' : 'transparent',
-                            transition: 'background 0.12s',
-                          }}
-                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(56,189,248,0.07)'}
-                          onMouseLeave={e => e.currentTarget.style.background = r % 2 === 0 ? 'rgba(255,255,255,0.022)' : 'transparent'}
-                        >
-                          {tableCols.map((c, j) => (
-                            <td
-                              key={j}
-                              className="px-4 py-2.5 whitespace-nowrap"
-                              style={{
-                                borderBottom: '1px solid rgba(56,189,248,0.07)',
-                                fontFamily: '"JetBrains Mono", ui-monospace, monospace',
-                                fontSize: '0.78rem',
-                                letterSpacing: '0.01em',
-                                color: row[c.name] == null
-                                  ? 'rgba(148,163,184,0.35)'
-                                  : 'rgba(226,232,240,0.9)',
-                              }}
-                            >
-                              {row[c.name] == null ? (
-                                <span
-                                  className="px-1.5 py-0.5 rounded text-xs"
-                                  style={{ background: 'rgba(239,68,68,0.12)', color: 'rgba(252,165,165,0.7)', border: '1px solid rgba(239,68,68,0.2)' }}
-                                >
-                                  null
-                                </span>
-                              ) : (
-                                String(row[c.name])
-                              )}
-                            </td>
+                              <span
+                                className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold tracking-wide"
+                                style={{
+                                  background: i % 3 === 0
+                                    ? 'rgba(14,165,233,0.18)'
+                                    : i % 3 === 1
+                                      ? 'rgba(99,102,241,0.18)'
+                                      : 'rgba(168,85,247,0.18)',
+                                  color: i % 3 === 0 ? '#7dd3fc' : i % 3 === 1 ? '#a5b4fc' : '#d8b4fe',
+                                  border: `1px solid ${i % 3 === 0 ? 'rgba(56,189,248,0.3)' : i % 3 === 1 ? 'rgba(99,102,241,0.3)' : 'rgba(168,85,247,0.3)'}`,
+                                }}
+                              >
+                                {c.name}
+                              </span>
+                            </th>
                           ))}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {pageRows.map((row, r) => (
+                          <tr
+                            key={safePage * PAGE_SIZE + r}
+                            style={{
+                              background: r % 2 === 0 ? 'rgba(255,255,255,0.022)' : 'transparent',
+                              transition: 'background 0.12s',
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(56,189,248,0.07)'}
+                            onMouseLeave={e => e.currentTarget.style.background = r % 2 === 0 ? 'rgba(255,255,255,0.022)' : 'transparent'}
+                          >
+                            {tableCols.map((c, j) => {
+                              const isLong = typeof row[c.name] === 'string' && row[c.name].length > 60;
+                              return (
+                              <td
+                                key={j}
+                                className="px-4 py-2.5"
+                                style={{
+                                  borderBottom: '1px solid rgba(56,189,248,0.07)',
+                                  fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+                                  fontSize: '0.78rem',
+                                  letterSpacing: '0.01em',
+                                  whiteSpace: isLong ? 'normal' : 'nowrap',
+                                  minWidth: isLong ? '18rem' : undefined,
+                                  maxWidth: isLong ? '26rem' : undefined,
+                                  color: row[c.name] == null
+                                    ? 'rgba(148,163,184,0.35)'
+                                    : 'rgba(226,232,240,0.9)',
+                                }}
+                              >
+                                {row[c.name] == null ? (
+                                  <span
+                                    className="px-1.5 py-0.5 rounded text-xs"
+                                    style={{ background: 'rgba(239,68,68,0.12)', color: 'rgba(252,165,165,0.7)', border: '1px solid rgba(239,68,68,0.2)' }}
+                                  >
+                                    null
+                                  </span>
+                                ) : (
+                                  String(row[c.name])
+                                )}
+                              </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
 
-                  {generatedData.length > 25 && (
-                    <div
-                      className="text-center py-3 text-xs font-medium"
-                      style={{
-                        color: 'rgba(148,163,184,0.55)',
-                        borderTop: '1px solid rgba(56,189,248,0.1)',
-                        background: 'rgba(5,12,35,0.6)',
-                      }}
-                    >
-                      Showing 25 of{' '}
-                      <span style={{ color: '#7dd3fc', fontWeight: 700 }}>{generatedData.length}</span>{' '}
-                      rows
+                  {/* Pagination footer */}
+                  <div
+                    className="flex items-center justify-between flex-wrap gap-2 px-3 py-2.5 mt-1 rounded-xl"
+                    style={{ border: '1px solid rgba(56,189,248,0.1)', background: 'rgba(5,12,35,0.6)' }}
+                  >
+                    <span className="text-xs font-medium" style={{ color: 'rgba(148,163,184,0.7)' }}>
+                      Rows{' '}
+                      <span style={{ color: '#7dd3fc', fontWeight: 700 }}>
+                        {(safePage * PAGE_SIZE + 1).toLocaleString()}-{Math.min((safePage + 1) * PAGE_SIZE, generatedData.length).toLocaleString()}
+                      </span>{' '}
+                      of <span style={{ color: '#7dd3fc', fontWeight: 700 }}>{generatedData.length.toLocaleString()}</span>
+                    </span>
+
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setPage(0)} disabled={safePage === 0}
+                        className={pagerButtonClass(safePage > 0)} title="First page">
+                        <ChevronsLeft className="h-4 w-4" />
+                      </button>
+                      <button onClick={() => setPage(safePage - 1)} disabled={safePage === 0}
+                        className={pagerButtonClass(safePage > 0)} title="Previous page">
+                        <ChevronLeft className="h-4 w-4" />
+                      </button>
+                      <span className="text-xs font-mono font-semibold text-slate-400 px-2 select-none">
+                        {safePage + 1} / {totalPages}
+                      </span>
+                      <button onClick={() => setPage(safePage + 1)} disabled={safePage >= totalPages - 1}
+                        className={pagerButtonClass(safePage < totalPages - 1)} title="Next page">
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                      <button onClick={() => setPage(totalPages - 1)} disabled={safePage >= totalPages - 1}
+                        className={pagerButtonClass(safePage < totalPages - 1)} title="Last page">
+                        <ChevronsRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Quality report */}
+                  {report && (
+                    <div className="mt-3">
+                      <button
+                        onClick={() => setShowReport(!showReport)}
+                        className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-300 hover:text-sky-200 transition-all duration-150"
+                        style={{ border: '1px solid rgba(56,189,248,0.14)', background: 'rgba(9,14,35,0.6)' }}
+                      >
+                        <span className="flex items-center gap-2">
+                          <ClipboardCheck className="h-4 w-4 text-emerald-400" />
+                          Data Quality Report
+                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                            style={{
+                              background: report.engine === 'hybrid' ? 'rgba(52,211,153,0.12)' : 'rgba(148,163,184,0.12)',
+                              color: report.engine === 'hybrid' ? '#6ee7b7' : '#94a3b8',
+                              border: `1px solid ${report.engine === 'hybrid' ? 'rgba(52,211,153,0.3)' : 'rgba(148,163,184,0.25)'}`,
+                            }}
+                          >
+                            {report.engine === 'hybrid' ? 'AI + Statistical' : report.engine === 'local' ? 'Offline Engine' : 'Statistical'}
+                          </span>
+                        </span>
+                        <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${showReport ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      {showReport && (
+                        <div
+                          className="mt-2 rounded-2xl p-4 sm:p-5 space-y-4 relative overflow-hidden"
+                          style={{
+                            border: '1px solid rgba(56,189,248,0.16)',
+                            background: 'linear-gradient(165deg, rgba(9,14,35,0.85), rgba(5,12,35,0.75))',
+                          }}
+                        >
+                          {/* soft glow accent */}
+                          <div
+                            className="pointer-events-none absolute inset-0"
+                            style={{ background: 'radial-gradient(ellipse at 20% 0%, rgba(14,165,233,0.08), transparent 55%)' }}
+                          />
+
+                          {/* Meta chips */}
+                          <div className="flex flex-wrap gap-2 relative">
+                            <MetaChip icon={Hash} label="Seed" value={report.seed} />
+                            <MetaChip icon={Layers} label="Mode" value={report.distribution} accent="#a5b4fc" />
+                            {report.task && (
+                              <MetaChip icon={Brain} label="Task" value={report.task} accent="#d8b4fe" />
+                            )}
+                            {report.model_used && (
+                              <MetaChip icon={Cpu} label="Model" value={report.model_used.split('/').pop()} accent="#6ee7b7" />
+                            )}
+                            {report.unique_pool_size != null && (
+                              <MetaChip icon={Database} label="Unique pool" value={report.unique_pool_size.toLocaleString()} accent="#fcd34d" />
+                            )}
+                            {report.custom_instructions_applied && (
+                              <MetaChip icon={CheckCircle2} label="Instructions" value="applied" accent="#6ee7b7" />
+                            )}
+                          </div>
+
+                          {/* Label distribution (NLP tasks) */}
+                          {report.label_distribution && (
+                            <div className="relative space-y-2">
+                              <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                                Label Distribution
+                                {report.label_noise_flips > 0 && (
+                                  <span className="ml-2 normal-case tracking-normal font-medium text-amber-400/90">
+                                    · {report.label_noise_flips} labels intentionally flipped (noise)
+                                  </span>
+                                )}
+                              </p>
+                              <LabelDistributionBar distribution={report.label_distribution} />
+                            </div>
+                          )}
+
+                          {/* Per-column cards */}
+                          <div className="relative grid sm:grid-cols-2 gap-2.5">
+                            {report.columns?.map((c, i) => (
+                              <ReportColumnCard key={i} col={c} />
+                            ))}
+                          </div>
+
+                          <p className="relative text-xs text-slate-500 leading-relaxed">
+                            Every percentage above is enforced exactly by the statistical engine. Run again with
+                            seed <span className="text-sky-300 font-semibold">{report.seed}</span> to reproduce this dataset.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

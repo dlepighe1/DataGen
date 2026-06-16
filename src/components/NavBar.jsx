@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link } from 'react-router-dom';
 import { Database, Home, BookOpen, Package, Info } from 'lucide-react';
 
 const Navbar = () => {
@@ -37,8 +37,12 @@ const Navbar = () => {
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          {/* Brand */}
-          <div className="flex items-center space-x-2">
+          {/* Brand, links back to the homepage */}
+          <Link
+            to="/"
+            className="flex items-center space-x-2 rounded-lg transition-transform duration-200 hover:scale-[1.02] active:scale-[0.98]"
+            title="DataGen AI home"
+          >
             <div
               className="flex items-center justify-center w-9 h-9 rounded-lg"
               style={{
@@ -51,7 +55,7 @@ const Navbar = () => {
             <span className="text-xl font-bold text-gradient">
               DataGen AI
             </span>
-          </div>
+          </Link>
 
           {/* Desktop nav */}
           <div className="hidden md:flex items-center space-x-1">

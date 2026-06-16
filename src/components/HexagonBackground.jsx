@@ -56,9 +56,7 @@ export default function HexagonBackground() {
 
     const MAX_DIST = hexWidth * 1.5;
 
-    let tick = 0;
     const draw = () => {
-      tick++;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       // Move nodes around their base position slightly

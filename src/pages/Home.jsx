@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, Database, Download, Search, Sparkles, Cpu, BarChart2 } from 'lucide-react';
 
 /* ── Feature card ────────────────────────────────────────────────── */
-function FeatureCard({ icon: Icon, title, desc, accent }) {
+function FeatureCard({ icon, title, desc, accent }) {
+  const Icon = icon;
   return (
     <div
       className="glass-panel group relative overflow-hidden rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1"
@@ -13,14 +14,16 @@ function FeatureCard({ icon: Icon, title, desc, accent }) {
         className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl"
         style={{ background: `radial-gradient(circle at 50% 0%, ${accent}22, transparent 70%)` }}
       />
-      <div
-        className="mb-4 inline-flex items-center justify-center w-12 h-12 rounded-xl border"
-        style={{ background: `${accent}1A`, borderColor: `${accent}40` }}
-      >
-        <Icon className="h-6 w-6" style={{ color: accent }} />
+      <div className="flex flex-col items-center text-center">
+        <div
+          className="mb-4 inline-flex items-center justify-center w-12 h-12 rounded-xl border"
+          style={{ background: `${accent}1A`, borderColor: `${accent}40` }}
+        >
+          <Icon className="h-6 w-6" style={{ color: accent }} />
+        </div>
+        <h3 className="text-xl font-semibold text-slate-100 mb-2">{title}</h3>
+        <p className="text-[15px] leading-relaxed text-slate-400">{desc}</p>
       </div>
-      <h3 className="text-xl font-semibold text-slate-100 mb-2">{title}</h3>
-      <p className="text-[15px] leading-relaxed text-slate-400">{desc}</p>
     </div>
   );
 }
@@ -43,7 +46,7 @@ const Home = () => {
             }}
           >
             <Sparkles className="h-3.5 w-3.5" />
-            Powered by Gemini AI
+            Powered by AI
           </div>
 
           {/* Headline */}
@@ -54,7 +57,7 @@ const Home = () => {
           {/* Sub-headline */}
           <p className="text-xl md:text-2xl mb-10 max-w-2xl mx-auto text-slate-400 leading-relaxed">
             Generate high-quality synthetic datasets for machine learning,
-            testing, and research — in seconds.
+            testing, and research in seconds.
           </p>
 
           {/* CTAs */}
@@ -81,10 +84,11 @@ const Home = () => {
 
         {/* Stats strip */}
         <div className="max-w-4xl mx-auto px-4 mb-20">
-          <div className="grid grid-cols-3 gap-px rounded-2xl overflow-hidden shadow-2xl glass-panel">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-px rounded-2xl overflow-hidden shadow-2xl glass-panel">
             {[
-              { value: '7+', label: 'Dataset Templates' },
-              { value: '10K', label: 'Max Rows / Gen' },
+              { value: '10K', label: 'Rows per Generation' },
+              { value: '11', label: 'Templates & NLP Tasks' },
+              { value: '100%', label: 'Seeded & Reproducible' },
               { value: '3', label: 'Export Formats' },
             ].map((s, i) => (
               <div
@@ -108,8 +112,8 @@ const Home = () => {
           <div className="grid md:grid-cols-3 gap-6">
             <FeatureCard
               icon={Database}
-              title="Custom Columns"
-              desc="Define your own schema: text, numbers, dates, booleans, emails — then let AI do the rest."
+              title="Tabular & NLP Datasets"
+              desc="Define your own schema or generate ready-made NLP sets for classification, retrieval, question answering, and paraphrase detection."
               accent="#60a5fa"
             />
             <FeatureCard
@@ -121,7 +125,7 @@ const Home = () => {
             <FeatureCard
               icon={BarChart2}
               title="Export Anywhere"
-              desc="Download your generated dataset as CSV, JSON, or plain text — ready for any workflow."
+              desc="Download your generated dataset as CSV, JSON, or plain text, ready to drop into any workflow."
               accent="#34d399"
             />
           </div>
