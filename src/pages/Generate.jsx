@@ -7,6 +7,7 @@ import {
   Cpu, CheckCircle2, Layers,
 } from 'lucide-react';
 import { Input } from '../components/UI/Input';
+import { NumberStepper } from '../components/UI/NumberStepper';
 import { Slider } from '../components/UI/Slider';
 import { Switch } from '../components/UI/Switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/UI/Select';
@@ -208,8 +209,8 @@ const Generate = () => {
   useEffect(() => {
     if (!isGenerating && generatedData.length && tableRef.current) {
       gsap.fromTo(tableRef.current,
-        { opacity: 0, y: 10 },
-        { opacity: 1, y: 0, duration: 0.5, ease: 'power2.out' }
+        { opacity: 0, y: 18 },
+        { opacity: 1, y: 0, duration: 0.5, ease: 'back.out(1.4)' }
       );
     }
   }, [isGenerating, generatedData]);
@@ -529,7 +530,7 @@ const Generate = () => {
       <div className="max-w-7xl mx-auto">
 
         {/* ── Page Heading ── */}
-        <div className="text-center mb-10">
+        <div data-animate className="text-center mb-10">
           <h1 className="text-4xl md:text-5xl font-bold text-gradient mb-3 tracking-tight">
             Generate Your Dataset
           </h1>
@@ -541,7 +542,7 @@ const Generate = () => {
         <div className="grid lg:grid-cols-2 gap-8 items-start">
 
           {/* ══════════ LEFT COLUMN ══════════ */}
-          <div className="space-y-6">
+          <div data-animate className="space-y-6">
 
             {/* 1. Dataset Configuration Card */}
             <div className="glass-panel p-6">
@@ -694,27 +695,28 @@ const Generate = () => {
 
               {/* ── Shared fields below tabs ── */}
               <div className="mt-6 space-y-5">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <SectionLabel>Number of Rows</SectionLabel>
-                    <Input
+                    <NumberStepper
                       id="row-count"
-                      type="number"
                       value={rowCount}
-                      onChange={e => setRowCount(+e.target.value)}
-                      onBlur={() => setRowCount(Math.min(Math.max(1, rowCount || 1), MAX_ROWS))}
-                      min="1"
+                      onChange={setRowCount}
+                      min={1}
                       max={MAX_ROWS}
+                      step={100}
                     />
                     <p className="text-xs text-slate-500 mt-1.5 pl-1">Up to {MAX_ROWS.toLocaleString()} rows</p>
                   </div>
                   <div>
                     <SectionLabel>Seed (Optional)</SectionLabel>
-                    <Input
+                    <NumberStepper
                       id="seed"
-                      type="number"
                       value={seed}
-                      onChange={e => setSeed(e.target.value)}
+                      onChange={v => setSeed(v === '' ? '' : String(v))}
+                      min={0}
+                      step={1}
+                      allowEmpty
                       placeholder="Random"
                     />
                     <p className="text-xs text-slate-500 mt-1.5 pl-1">Same seed gives the same dataset</p>
@@ -852,18 +854,16 @@ const Generate = () => {
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <SectionLabel>Min Value</SectionLabel>
-                            <Input
-                              type="number"
+                            <NumberStepper
                               value={column.minValue ?? 0}
-                              onChange={e => updateColumn(index, { minValue: parseFloat(e.target.value) })}
+                              onChange={v => updateColumn(index, { minValue: v === '' ? 0 : Number(v) })}
                             />
                           </div>
                           <div>
                             <SectionLabel>Max Value</SectionLabel>
-                            <Input
-                              type="number"
+                            <NumberStepper
                               value={column.maxValue ?? 100}
-                              onChange={e => updateColumn(index, { maxValue: parseFloat(e.target.value) })}
+                              onChange={v => updateColumn(index, { maxValue: v === '' ? 0 : Number(v) })}
                             />
                           </div>
                         </div>
@@ -977,7 +977,7 @@ const Generate = () => {
           </div>{/* end left col */}
 
           {/* ══════════ RIGHT COLUMN: Preview ══════════ */}
-          <div className="glass-panel overflow-hidden self-start">
+          <div data-animate className="glass-panel overflow-hidden self-start">
 
             {/* Panel header */}
             <div

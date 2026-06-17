@@ -1,0 +1,168 @@
+Title:            DataGen — Schema-First Synthetic Data Generator
+Slug:             datagen
+Project Type:     ai_ml_case_study
+Category:         AI Innovations
+Status:           completed
+Tags:             ["Python", "NumPy", "scikit-learn", "SciPy", "Flask", "LLM", "OpenRouter", "React", "Vite", "Tailwind CSS"]
+Timeline:         Jan 2026 – Jun 2026
+Role:             Solo — ML/Data Engineer & Frontend
+Image:            datagen-cover.jpg   (2000×1125, hotspot on the schema builder + quality report)
+
+Description:      An AI-powered synthetic dataset generator that helps users create structured
+                  training data for machine learning experiments, prototypes, and data science
+                  workflows.
+
+Long Description: DataGen is an AI-powered synthetic dataset generator that helps users create
+                  structured training data for ML experiments, prototypes, and data science
+                  workflows. Describe the dataset you need — columns, domain, and an optional
+                  free-text brief — and get up to 10,000 statistically sound, ready-to-train
+                  rows in about a second as CSV, JSON, or TXT.
+
+                  A hybrid engine pairs an LLM semantic layer with a NumPy statistical core,
+                  each doing only what it's good at: the model invents coherent text (names that
+                  match emails, domain-appropriate categories) while every number, date, ID,
+                  missing cell, and outlier is synthesized locally, so distributions, ranges,
+                  and quality knobs are enforced exactly. Tunable missing %, noise, outliers,
+                  and class balance also make it easy to produce deliberately imperfect data for
+                  cleaning practice. Every run is seeded — a seed plus a schema reproduces the
+                  exact dataset — and ships with a quality-audit report, so output is verifiable.
+
+# --- AI/ML fields ---
+Problem:   Real datasets don't come with knobs for "10% missing" or "5 outliers." GAN/copula
+           tools (SDV, CTGAN) need a real dataset to learn from, rule-based fakers (Faker,
+           Mockaroo) have no domain understanding, and asking an LLM to emit CSV is unsound —
+           token-sampled numbers ignore distributions and one completion can't hold 10K rows.
+Goal:      Generate domain-coherent, statistically faithful datasets from a schema alone — with
+           exactly enforced quality knobs, full seed reproducibility, and 10K rows in ~1s.
+Outcome:   Shipped a production hybrid engine and proved its data is usable with reproducible
+           benchmarks. Trained ONLY on DataGen synthetic data, a classifier reaches 90.5% of
+           real-data accuracy on a univariate-friendly real dataset (Breast Cancer) and 75.3%
+           on an interaction-heavy one (Digits) — tested on real held-out splits, far above
+           baseline — while matching real distributions 3.4x more faithfully than uniform
+           sampling. On text, the no-LLM offline engine still beats chance on 3,000 real public
+           reviews (NLP TSTR). The engine generates ~148K rows/sec at exact, bit-for-bit
+           reproducible quality, and — by confining the LLM to semantics — costs a flat ~$0.002
+           per run (~79x cheaper than an LLM emitting every row at 10K). A 4-model fallback
+           chain plus offline engine means generation never hard-fails. Live at datagen.pages.dev.
+
+Dataset Source:        Self-generating — no training corpus. The LLM produces a small (~80
+                       record) pool of coherent text from the schema; curated local banks serve
+                       as an offline fallback; the statistical core synthesizes all structured
+                       columns from scratch.
+Dataset Size:          Up to 10,000 rows / 50 columns; an ~80-record pool is recombined into
+                       ~1,500 unique identities so large datasets don't recycle names.
+Dataset Classes:       Tabular: 7 domain templates (e-commerce, healthcare, finance, education,
+                       sports, gaming, marketing) + 5 field types. NLP: 4 task types
+                       (classification, retrieval, QA, paraphrase) with 2–6 custom labels.
+Dataset Preprocessing: Email⇄name coherence, unique ID prefixing, truncated-normal sampling in
+                       range, exact missing-cell masking, deterministic outlier injection, and
+                       an optional "distorted" mode that dirties text, dates, and booleans.
+
+Model Used:        4-model fallback chain via OpenRouter — GPT-4o-mini → GPT-3.5-turbo →
+                   Llama 3.1 8B → Mistral 7B — plus an offline semantic engine. The LLM is the
+                   semantic layer only; it never emits rows.
+Model Approach:    Separation of concerns: the LLM generates a small JSON pool of coherent text
+                   records (honoring custom instructions); NumPy owns every measurable property
+                   — distributions, ranges, missing %, noise, outliers, IDs — all seeded.
+Model Training:    No model is trained — zero-shot by design. "Tuning" is the sampling:
+                   range-clipped truncated-normal draws (skewed mixture in distorted mode),
+                   exact-count missing/outlier masking, and prompts that force strict JSON.
+Model Evaluation:  Four reproducible benchmarks (backend/benchmark/, real numbers, no mocking).
+                   (1) Tabular TSTR — Train on Synthetic, Test on Real, on two real datasets with
+                   real held-out splits. Breast Cancer (569x30, univariate-friendly): a synthetic-
+                   only LogisticRegression scores 89.5% = 90.5% of the real model (98.8%). Digits
+                   (1797x64, interaction-heavy): 73.9% = 75.3% of real (98.2%) — the gap honestly
+                   maps the independent-column limitation. Naive label-agnostic arms collapse
+                   (24.9% / 15.1%), isolating the value of schema-first conditioning; marginal
+                   fidelity Wasserstein 0.51 vs. 1.73 uniform (3.4x closer).
+                   (2) NLP TSTR: trained only on DataGen synthetic sentiment, tested on the real
+                   public UCI Sentiment Labelled Sentences (3,000 reviews), the offline engine
+                   scores 60.4% vs. 50% chance — an honest lower bound; the LLM hybrid path does
+                   more. Class balance (750/750) and 5% label noise are exact.
+                   (3) Parameter fidelity: 0 cells of error on missing %, 0 outlier-count error
+                   (100% out of range), 100% range adherence over 40K values, KS p=0.99,
+                   byte-identical reproduction, ~148K rows/sec. (4) Cost model: flat ~$0.002/run
+                   vs. ~$0.15 for a naive LLM at 10K rows (~79x). Plus a pytest suite asserting
+                   the guarantees in CI; figures rendered by benchmark/plots.py.
+
+# No confusion matrix (this is a generator, not a classifier) — use the real benchmark
+# figures rendered by backend/benchmark/plots.py in these two image slots instead.
+Confusion Matrix:  backend/benchmark/figures/tstr-comparison.png    (1953×949)
+                   # Headline result. Train-on-synthetic, test-on-real across two tabular
+                   # datasets + an NLP set; real upper bound, DataGen, naive, baselines.
+Training Curve:    backend/benchmark/figures/fidelity-dashboard.png (1953×... )
+                   # Exactness diagonal + KS distribution fit + marginal fidelity + cost scaling.
+
+Challenges & Solutions (challengesSolutions[]):
+  - challenge: "An LLM asked to emit CSV produced unsound data — numbers ignored distributions
+               and requested missing percentages were silently disregarded."
+    solution:  "Split the architecture: the LLM emits only a small pool of coherent text; NumPy
+               synthesizes every number, date, missing cell, and outlier to the exact count."
+  - challenge: "One completion can't hold 10K rows, and reusing an ~80-record pool recycled the
+               same names across large datasets."
+    solution:  "Recombine names and re-derive emails to expand the pool into ~1,500 unique
+               identities, decoupling row count from the LLM and keeping 10K rows under ~1s."
+  - challenge: "A free-tier service can't depend on any single model — keys expire, free models
+               rate-limit, and upstreams go down."
+    solution:  "Built a 4-model fallback chain with status-aware retries plus a fully offline
+               engine, so generation never hard-fails on an upstream model."
+  - challenge: "Users had no way to trust that 'exactly 10% missing' was actually honored."
+    solution:  "Every run returns a quality-audit report (requested vs. actual missing %,
+               ranges, outliers, seed, model) under the preview — output is auditable."
+
+Key Insights (keyInsights[] — plain strings):
+  - "Schema-first synthetic data transfers: a synthetic-only classifier hits 90.5% of real accuracy on univariate-friendly data, 75.3% on interaction-heavy data"
+  - "Where it works vs. where it doesn't is measurable: the Breast-Cancer→Digits gap is exactly the cost of generating columns independently"
+  - "Confining the LLM to semantics makes cost flat in N — ~79x cheaper than emitting every row, and it dodges the completion token limit"
+  - "Benchmark your own claims honestly — report the offline NLP lower bound (60% on real reviews), not a flattering in-distribution number"
+  - "Use each tool for what it's good at — LLMs for semantics, NumPy for statistics"
+  - "Exactness beats approximation: 'exactly 200 of 1000 missing' is more useful than '~20%'"
+
+Impact (Metric[]):
+  - { label: "Cost per run vs. naive LLM (10K rows)", textValue: "~79x cheaper" }
+  - { label: "Max rows per generation", value: 10, unit: "k" }
+  - { label: "Parameter fidelity", textValue: "exact" }
+  - { label: "Reproducibility", textValue: "bit-for-bit" }
+
+Results Metrics (Metric[]):
+  - { label: "TSTR — % of real accuracy (Breast Cancer)", value: 90.5, unit: "%" }
+  - { label: "TSTR — % of real accuracy (Digits)", value: 75.3, unit: "%" }
+  - { label: "Marginal fidelity vs. uniform", textValue: "3.4x closer" }
+  - { label: "Throughput", value: 148, unit: "k rows/s" }
+  - { label: "Missing-% / outlier-count error", value: 0, unit: "%" }
+  - { label: "Cost per run", textValue: "flat ~$0.002" }
+
+Pipeline Steps (ordered list of short labels — icons auto-assigned):
+  - "Define schema & dirt knobs"
+  - "LLM semantic pool (4-model fallback)"
+  - "Expand to unique identities"
+  - "NumPy statistical assembly"
+  - "Enforce missing / noise / outliers"
+  - "Quality audit report"
+  - "Export CSV / JSON / TXT"
+
+What I Learned:  On the data-science side, the most valuable habit was benchmarking my own
+                 claims: building a TSTR harness forced me to quantify not just where DataGen
+                 works (90.5% of real accuracy) but exactly where it doesn't (the joint-
+                 structure gap), and to interpret that gap honestly rather than hide it. On the
+                 engineering side, the key call was deciding what the model should NOT do — once
+                 the LLM was confined to semantics and NumPy owned everything measurable, exact
+                 percentages, reproducibility, scale, and cost all fell out for free. Shipping it
+                 also taught me how much of production ML is resilience engineering: typed
+                 errors, status-aware retries, rate limiting, and an offline path so the service
+                 degrades instead of dying.
+
+Next Steps (nextSteps[] — strings):
+  - "Inter-column constraints & learned correlations to close the Digits-style joint-structure gap"
+  - "Run the NLP TSTR through the LLM-hybrid path (vs. the offline lower bound) to quantify the full text-transfer ceiling"
+  - "Categorical distribution controls (explicit class weights for label columns)"
+  - "Streaming generation beyond 10K rows"
+  - "Frontend polish: code-split the 528 KB bundle and add per-section reveal animations"
+  - "Multilingual semantic pools (Spanish, French)"
+
+# Optional: set demoUrl + gallery[] to show the "Live Demo Showcase" grid.
+# The two benchmark figures are real, rendered by backend/benchmark/plots.py.
+demoUrl:   https://datagen.pages.dev
+gallery:   [benchmark/figures/tstr-comparison.png, benchmark/figures/fidelity-dashboard.png,
+            schema-builder.jpg, quality-report.jpg, nlp-tasks.jpg]   (1600×900 each)
+githubUrl: https://github.com/dlepighe1/DataGen

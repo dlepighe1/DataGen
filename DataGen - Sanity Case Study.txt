@@ -1,0 +1,270 @@
+===============================================================================
+DATAGEN  |  AI / ML CASE STUDY  |  Sanity CMS field guide
+Copy each block into the matching field in Sanity.
+===============================================================================
+
+
+-------------------------------------------------------------------------------
+CORE
+-------------------------------------------------------------------------------
+
+Title:
+DataGen: Schema-First Synthetic Data Generator
+
+Slug:
+datagen
+
+Legacy ID:
+datagen
+
+Card Description:
+An AI powered generator that creates realistic, ready to use training data for
+machine learning experiments, prototypes, and data science workflows, with no
+real dataset required to start.
+
+Project Overview:
+DataGen turns a description into a dataset. You define the columns you need or pick a
+template, describe the domain in plain English, choose how clean or messy you want the
+data, and get up to 10,000 realistic, reproducible rows in about a second as CSV, JSON,
+or TXT.
+
+A hybrid engine uses each tool for what it does best. A language model writes coherent
+text such as names that match emails and on topic categories, while a NumPy statistical
+core produces every number, date, ID, missing value, and outlier so distributions and
+quality settings come out exactly as requested. The data is also verifiable: every run
+ships with an audit report and is reproducible from a seed. Most importantly, it is
+benchmarked. A model trained only on DataGen data reaches up to 90.5 percent of
+real-data accuracy on a real, held out test set.
+
+Category:
+Data Science (also fits AI Innovations)
+
+Detail Page Layout:
+AI / ML Case Study
+
+Tags:
+Python, NumPy, scikit-learn, SciPy, Matplotlib, Flask, LLM / Prompt Engineering,
+OpenRouter, React, Vite, Tailwind CSS, Synthetic Data, TSTR Benchmarking
+
+GitHub URL:
+https://github.com/dlepighe1/DataGen
+
+Demo URL:
+https://datagen.pages.dev
+
+Report URL:
+https://github.com/dlepighe1/DataGen/blob/main/backend/benchmark/RESULTS.md
+
+Featured Case Study:
+On
+
+Project Sort Number:
+1
+
+
+-------------------------------------------------------------------------------
+PROBLEM / GOAL / OUTCOME
+-------------------------------------------------------------------------------
+
+Problem:
+Good training data is hard to get. Real datasets are often private, expensive, or do
+not exist yet, and they never come with the controls practitioners need, such as
+"give me exactly 10 percent missing values" or "inject five outliers." Existing tools
+each fall short. GAN and copula models need a real dataset to learn from, rule based
+fakers have no understanding of your domain, and asking a language model to write a
+spreadsheet is statistically unsound because the numbers ignore real distributions and
+the requested settings get dropped.
+
+Goal:
+Generate domain realistic, statistically faithful datasets from a schema alone, with
+quality controls applied exactly, full reproducibility from a seed, 10,000 rows in
+about a second, and proof that the data is genuinely useful for downstream machine
+learning.
+
+Outcome:
+A live, production engine with the results to back it up. Trained only on DataGen data,
+a model reached 90.5 percent of real-data accuracy on a univariate friendly dataset and
+75.3 percent on a harder, interaction heavy one, both tested on real held out data and
+far above baseline. Generation runs at about 148,000 rows per second with every quality
+setting hit to the exact count and identical output from the same seed. By keeping the
+language model to text only, each run costs a flat 0.002 dollars, roughly 79 times
+cheaper than asking a model to write every row. A four model fallback chain and an
+offline engine mean it never hard fails.
+
+
+-------------------------------------------------------------------------------
+DATASET
+-------------------------------------------------------------------------------
+
+Dataset Source:
+Self generating, with no training corpus. The language model produces a small pool of
+about 80 coherent text records from the schema, curated local text banks act as an
+offline fallback, and the statistical core builds all structured columns from scratch.
+For evaluation, three real public datasets served as ground truth: sklearn Breast
+Cancer, sklearn Digits, and the UCI Sentiment Labelled Sentences corpus.
+
+Dataset Size:
+Up to 10,000 rows by 50 columns per run. An 80 record pool is recombined into about
+1,500 unique identities so large datasets never recycle names. Benchmark sets: Breast
+Cancer (569 by 30), Digits (1,797 by 64), UCI Sentiment (3,000 labelled reviews).
+
+Dataset Classes:
+Tabular: 7 domain templates (e-commerce, healthcare, finance, education, sports,
+gaming, marketing) plus 5 manual field types (text, number, email, date, boolean).
+NLP: 4 task types (classification, semantic retrieval, question answering, paraphrase
+pairs) with user defined label sets of 2 to 6 classes.
+
+Dataset Preprocessing:
+Name and email consistency, unique padded IDs, truncated normal sampling within set
+ranges, exact missing cell masking, and deterministic outlier injection. An optional
+distorted mode adds messy casing, mixed date formats, dirty booleans, skewed classes,
+and label noise for data cleaning and robustness practice.
+
+
+-------------------------------------------------------------------------------
+MODEL / METHOD
+-------------------------------------------------------------------------------
+
+Model Used / AI Provider:
+A hybrid engine. The semantic layer is a four model fallback chain through OpenRouter
+(GPT-4o-mini, then GPT-3.5-turbo, then Llama 3.1 8B, then Mistral 7B) plus a curated
+offline engine. The statistical core is NumPy. Evaluation uses scikit-learn
+LogisticRegression and a TF-IDF text classifier.
+
+Model Approach:
+The core decision was separation of concerns. The language model only writes a small
+pool of coherent text and never produces rows, while NumPy owns every measurable
+property: distributions, ranges, missing percentages, noise, outliers, and IDs, all
+seeded. That is what makes the quality settings exact, the output reproducible, the
+cost flat, and 10,000 row generation possible, none of which a model writing everything
+could guarantee.
+
+Training / Implementation Notes:
+No model is trained; generation is zero shot by design. The work lives in the sampling:
+range clipped truncated normal draws, exact count masking for missing values and
+outliers, prompts that force strict JSON and consistent records, and a pool expansion
+step that separates row count from the language model. The backend runs on Flask and
+Gunicorn on Render with rate limiting, a typed error system, and retry logic. The
+frontend is React 19, Vite, and Tailwind on Cloudflare Pages.
+
+Evaluation Strategy:
+Four reproducible benchmarks built on real numbers, with no mocking. First, Train on
+Synthetic Test on Real: train a model only on synthetic data and test it on real held
+out data, across two datasets of different difficulty. Second, an NLP version: train on
+synthetic sentiment and test on a real public review corpus. Third, parameter fidelity:
+requested versus actual accuracy, distribution fit, reproducibility, and throughput.
+Fourth, a cost comparison against a naive approach that writes every row. A 34 test
+suite enforces the exactness guarantees in CI.
+
+
+-------------------------------------------------------------------------------
+PIPELINE
+-------------------------------------------------------------------------------
+
+Pipeline Steps:
+1. Define the schema and quality controls (columns, types, missing percent, noise,
+   outliers)
+2. Generate the semantic pool (language model writes text, with an offline backup)
+3. Expand to unique identities so rows never repeat
+4. Assemble columns with NumPy (numbers, dates, IDs, booleans, all seeded)
+5. Apply quality settings exactly (missing values, outliers, noise, class balance)
+6. Audit and verify (a report compares requested versus actual)
+7. Export and deploy (download as CSV, JSON, or TXT; benchmark for real usefulness)
+
+
+-------------------------------------------------------------------------------
+RESULTS
+-------------------------------------------------------------------------------
+
+Results Metrics:
+- Tabular transfer: a model trained only on synthetic data reaches 90.5 percent of
+  real-data accuracy on Breast Cancer (89.5 vs 98.8) and 75.3 percent on Digits
+  (73.9 vs 98.2)
+- Distribution fidelity: 3.4 times closer to real than uniform sampling
+- NLP transfer: 60.4 percent on 3,000 real public reviews versus a 50 percent chance
+  baseline, an honest lower bound from the offline engine
+- Exactness: zero error on requested missing percentages, exact outlier counts with
+  100 percent landing out of range, 100 percent range adherence across 40,000 values
+- Speed: about 148,000 rows per second; 10,000 rows in 0.067 seconds
+- Reproducibility: identical output from the same seed
+- Cost: a flat 0.002 dollars per run, about 79 times cheaper than a naive language
+  model approach at 10,000 rows
+- Reliability: four model fallback plus offline engine; 34 of 34 tests passing
+
+Primary Result Image:
+backend/benchmark/figures/tstr-comparison.png
+Train on Synthetic, Test on Real. The synthetic only model against the real data upper
+bound, a naive baseline, and a control, across two tabular datasets and the NLP test.
+This is the headline "does the data actually work" chart.
+
+Secondary Result Image:
+backend/benchmark/figures/fidelity-dashboard.png
+A four panel view: requested versus actual exactness, distribution fit, fidelity versus
+real, and cost scaling against a naive approach.
+
+Result Images:
+- tstr-comparison.png (transfer accuracy across datasets, primary)
+- fidelity-dashboard.png (fidelity, distribution fit, and cost)
+- In app data quality report (requested versus actual per column)
+- Generator and schema builder interface
+- NLP task setup (class balance and negative ratio controls)
+Both figures regenerate any time with: python -m benchmark.plots
+
+
+-------------------------------------------------------------------------------
+REFLECTION
+-------------------------------------------------------------------------------
+
+Challenges & Solutions:
+- Challenge: a language model asked to write a spreadsheet produced unsound data, with
+  numbers ignoring distributions and settings getting dropped.
+  Solution: split the work so the model only writes text while NumPy produces every
+  number, date, missing cell, and outlier to the exact count.
+
+- Challenge: a single model response cannot hold 10,000 rows, and reusing a small pool
+  recycled the same names.
+  Solution: recombine names and rebuild emails to expand the pool into about 1,500
+  unique identities, separating row count from the model and keeping 10,000 rows under
+  a second.
+
+- Challenge: showing the synthetic data is genuinely useful, not just realistic looking.
+  Solution: a Train on Synthetic, Test on Real benchmark suite, with the honest gap on
+  harder data reported rather than hidden.
+
+- Challenge: a free service cannot depend on one model, and users had no reason to trust
+  the settings.
+  Solution: a four model fallback with an offline engine, plus a per run report
+  comparing requested versus actual for every column.
+
+Key Insights:
+- Schema first synthetic data genuinely transfers, up to 90.5 percent of real accuracy
+  when the distribution is described well.
+- The drop to 75.3 percent on interaction heavy data is measurable, and it is exactly
+  the cost of generating columns independently.
+- Keeping the language model to text makes generation flat in cost and avoids the token
+  limit entirely.
+- Exactness beats approximation. "Exactly 200 of 1,000 missing" is more useful for
+  teaching and testing than "about 20 percent."
+- Benchmark your own claims, and report the conservative real number rather than a
+  flattering one.
+
+What I Learned:
+The most valuable habit was benchmarking my own claims. Building a Train on Synthetic,
+Test on Real harness made me quantify not only where DataGen works but exactly where it
+does not, and report the honest number on a real public dataset rather than a flattering
+one. On the engineering side, the best decision was choosing what the model should not
+do. Once the language model was limited to text and NumPy owned everything measurable,
+exact settings, reproducibility, scale, and low cost all followed. Shipping it also
+showed me how much of real machine learning work is reliability: clear error handling,
+retries, rate limiting, and an offline fallback so the service degrades instead of
+failing.
+
+What's Next:
+- Inter column constraints and learned correlations to close the gap on interaction
+  heavy data.
+- Run the NLP benchmark through the language model path to measure the full text
+  transfer ceiling.
+- Category distribution controls with explicit class weights.
+- Streaming generation beyond 10,000 rows.
+- Frontend polish: code split the bundle and add section reveal animations.
+- Multilingual text pools (Spanish, French).

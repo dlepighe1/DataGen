@@ -114,25 +114,26 @@ const About = () => {
             </CardHeader>
             <CardContent>
               <p className="text-slate-400 mb-6 text-[15px]">
-                DataGen AI is built using modern web technologies to ensure a fast, reliable, and user-friendly experience:
+                DataGen pairs a React front end with a hybrid Python generation engine — an LLM
+                semantic layer plus a NumPy statistical core — for fast, reproducible results:
               </p>
               <div className="grid md:grid-cols-2 gap-6 text-[15px]">
                 <div>
                   <h4 className="font-semibold mb-3 text-sky-300">Frontend</h4>
                   <ul className="text-slate-400 space-y-2">
-                    <li className="flex items-center"><div className="w-1.5 h-1.5 rounded-full bg-sky-500 mr-2"></div>React 18 with TypeScript</li>
-                    <li className="flex items-center"><div className="w-1.5 h-1.5 rounded-full bg-sky-500 mr-2"></div>Tailwind CSS for styling</li>
-                    <li className="flex items-center"><div className="w-1.5 h-1.5 rounded-full bg-sky-500 mr-2"></div>Shadcn/ui component library</li>
-                    <li className="flex items-center"><div className="w-1.5 h-1.5 rounded-full bg-sky-500 mr-2"></div>Responsive design principles</li>
+                    <li className="flex items-center"><div className="w-1.5 h-1.5 rounded-full bg-sky-500 mr-2"></div>React 19 + Vite</li>
+                    <li className="flex items-center"><div className="w-1.5 h-1.5 rounded-full bg-sky-500 mr-2"></div>Tailwind CSS 4 for styling</li>
+                    <li className="flex items-center"><div className="w-1.5 h-1.5 rounded-full bg-sky-500 mr-2"></div>Radix UI primitives + GSAP</li>
+                    <li className="flex items-center"><div className="w-1.5 h-1.5 rounded-full bg-sky-500 mr-2"></div>Deployed on Cloudflare Pages</li>
                   </ul>
                 </div>
                 <div>
-                  <h4 className="font-semibold mb-3 text-indigo-300">Features</h4>
+                  <h4 className="font-semibold mb-3 text-indigo-300">Backend</h4>
                   <ul className="text-slate-400 space-y-2">
-                    <li className="flex items-center"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2"></div>Real-time data generation</li>
-                    <li className="flex items-center"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2"></div>Multiple export formats</li>
-                    <li className="flex items-center"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2"></div>Intuitive user interface</li>
-                    <li className="flex items-center"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2"></div>Cross-platform compatibility</li>
+                    <li className="flex items-center"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2"></div>Flask API with NumPy core</li>
+                    <li className="flex items-center"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2"></div>4-model LLM fallback (OpenRouter)</li>
+                    <li className="flex items-center"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2"></div>Exact, seeded reproducibility</li>
+                    <li className="flex items-center"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2"></div>Deployed on Render</li>
                   </ul>
                 </div>
               </div>

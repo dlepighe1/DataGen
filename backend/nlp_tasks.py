@@ -88,6 +88,9 @@ _ITEMS = [
     "wireless earbuds", "air fryer", "yoga mat", "standing desk", "espresso machine",
     "mechanical keyboard", "robot vacuum", "fitness tracker", "bluetooth speaker",
     "electric kettle", "office chair", "webcam", "portable charger", "smart bulb", "backpack",
+    "blender", "running shoes", "desk lamp", "tablet", "headphones", "coffee grinder",
+    "mattress", "monitor", "phone case", "water bottle", "vacuum cleaner", "microwave",
+    "laptop stand", "gaming mouse", "smart watch", "toaster", "hair dryer",
 ]
 _ATTRS = [
     "long battery life", "a compact design", "noise cancellation", "fast charging",
@@ -112,18 +115,49 @@ _POS_CLAUSES = [
     "it exceeded all my expectations", "the quality is outstanding",
     "setup took two minutes and it works flawlessly", "it is worth every penny",
     "I would recommend it to anyone", "it performs even better than advertised",
+    "I absolutely love it", "this is the best purchase I have made all year",
+    "it works perfectly and feels premium", "I am extremely happy with it",
+    "fantastic value and great quality", "it is excellent and well worth the money",
+    "highly recommended, five stars", "it is amazing and easy to use",
+    "the design is beautiful and it runs great", "I am impressed by how well it works",
+    "wonderful product, exactly what I needed", "it is reliable and superbly built",
+    "genuinely delighted with this", "great battery life and a comfortable feel",
 ]
 _NEG_CLAUSES = [
     "it stopped working after a week", "the build quality feels cheap",
     "customer support never replied to me", "save your money and look elsewhere",
     "the advertised features simply do not work", "returning it was the best decision",
+    "it broke almost immediately", "this is a complete waste of money",
+    "I am very disappointed with it", "the worst purchase I have ever made",
+    "it is poorly made and overpriced", "it feels flimsy and unreliable",
+    "do not buy this, it is terrible", "it arrived damaged and barely functions",
+    "the quality is awful and it failed fast", "I regret buying it",
+    "it is frustrating and constantly malfunctions", "horrible experience overall",
+    "cheaply built and not worth it", "it died after a few days of light use",
 ]
 _NEU_CLAUSES = [
     "it does the job, nothing more", "performance is about average for the price",
     "it is okay but there are similar options", "delivery was on time and packaging was standard",
     "it matches the description, neither great nor bad", "results so far are mixed",
+    "it is fine, nothing special", "it works as expected, no surprises",
+    "decent enough but unremarkable", "it is alright for the price",
+    "average product, does what it says", "not bad, not great, just acceptable",
+    "it is reasonable but could be better", "it is a fairly standard option",
+    "it serves its purpose without standing out", "middling quality overall",
 ]
 _SENTIMENT_BANKS = {"positive": _POS_CLAUSES, "negative": _NEG_CLAUSES, "neutral": _NEU_CLAUSES}
+
+# Varied framings so generated reviews don't all share one rigid template.
+_CLASSIFICATION_TEMPLATES = [
+    "I bought the {item} last month and {clause}.",
+    "{clause_cap}.",
+    "I got the {item} and {clause}.",
+    "After using the {item} for a while, {clause}.",
+    "Honestly, {clause}.",
+    "My {item} review: {clause}.",
+    "Overall, {clause}.",
+    "Just tried the {item} — {clause}.",
+]
 
 _COMPANIES = [
     "Northwind Labs", "Bluepeak Systems", "Halcyon Goods", "Vertex Dynamics",
@@ -153,13 +187,15 @@ def _pick(rng, bank):
 def _offline_classification(rng, n, labels):
     pool, seen = [], set()
     known = {lb: _SENTIMENT_BANKS[lb.lower()] for lb in labels if lb.lower() in _SENTIMENT_BANKS}
-    for _ in range(n * 4):
+    for _ in range(n * 8):
         if len(pool) >= n:
             break
         label = _pick(rng, labels)
         item = _pick(rng, _ITEMS)
         if label in known:
-            text = f"I bought the {item} last month and {_pick(rng, known[label])}."
+            clause = _pick(rng, known[label])
+            template = _pick(rng, _CLASSIFICATION_TEMPLATES)
+            text = template.format(item=item, clause=clause, clause_cap=clause[:1].upper() + clause[1:])
         else:
             # Custom labels need the AI engine for real semantics; keep fallback honest but usable
             text = f"A customer comment about the {item}, annotated as '{label}' by reviewers: overall it {_pick(rng, _NEU_CLAUSES)}."

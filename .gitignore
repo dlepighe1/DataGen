@@ -14,6 +14,13 @@ dist-ssr
 .claude
 .github
 
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+# Benchmark download cache (datasets are fetched on demand)
+backend/benchmark/.data/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

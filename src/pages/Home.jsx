@@ -7,6 +7,7 @@ function FeatureCard({ icon, title, desc, accent }) {
   const Icon = icon;
   return (
     <div
+      data-animate
       className="glass-panel group relative overflow-hidden rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1"
     >
       {/* Accent glow on hover */}
@@ -35,7 +36,7 @@ const Home = () => {
       {/* ── Content ── */}
       <div style={{ position: 'relative', zIndex: 1 }}>
         {/* Hero */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-20 text-center">
+        <div data-animate className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-20 text-center">
           {/* Badge */}
           <div
             className="inline-flex items-center gap-2 mb-6 px-4 py-1.5 rounded-full text-sm font-medium"
@@ -83,7 +84,7 @@ const Home = () => {
         </div>
 
         {/* Stats strip */}
-        <div className="max-w-4xl mx-auto px-4 mb-20">
+        <div data-animate className="max-w-4xl mx-auto px-4 mb-20">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-px rounded-2xl overflow-hidden shadow-2xl glass-panel">
             {[
               { value: '10K', label: 'Rows per Generation' },
@@ -132,7 +133,7 @@ const Home = () => {
         </div>
 
         {/* CTA banner */}
-        <div className="mx-4 md:mx-auto max-w-4xl mb-24 rounded-3xl px-8 py-14 text-center glass-panel">
+        <div data-animate className="mx-4 md:mx-auto max-w-4xl mb-24 rounded-3xl px-8 py-14 text-center glass-panel">
           <h2 className="text-3xl font-bold text-white mb-3">
             Ready to Build Your First Dataset?
           </h2>

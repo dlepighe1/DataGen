@@ -1,0 +1,5 @@
+# Benchmark-only dependencies (not needed to run the DataGen service itself)
+numpy==2.2.6
+scipy==1.16.1
+scikit-learn==1.7.1
+matplotlib==3.10.5

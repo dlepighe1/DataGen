@@ -255,3 +255,14 @@ body {
   border-color: #0ea5e9;
   box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
 }
+
+/* ─────────────────────────────────────────────
+   Number inputs: hide native spinners
+   (NumberStepper provides on-brand controls instead)
+───────────────────────────────────────────── */
+.dg-stepper-input::-webkit-outer-spin-button,
+.dg-stepper-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.dg-stepper-input { -moz-appearance: textfield; appearance: textfield; }

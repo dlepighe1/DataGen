@@ -134,9 +134,48 @@ Covers exact missing-value percentages, range adherence, outlier injection count
 
 Returns `{ status, table, report }` where `report` is the quality audit. Errors carry a typed `error_type` (`validation`, `rate_limited`, `connection`, `model_unavailable`, `config`, `unknown`) that the UI maps to specific recovery states.
 
+## Benchmarks
+
+Two reproducible benchmarks live in `backend/benchmark/` (deps:
+`pip install -r backend/benchmark/requirements.txt`). All numbers in
+[`benchmark/RESULTS.md`](backend/benchmark/RESULTS.md) come straight from these
+scripts — nothing is hand-written.
+
+```bash
+cd backend
+python -m benchmark.fidelity_benchmark   # exactness, distribution fit, reproducibility, throughput
+python -m benchmark.tstr_benchmark       # tabular Train on Synthetic, Test on Real
+python -m benchmark.nlp_tstr_benchmark   # NLP TSTR: synthetic sentiment -> real reviews
+python -m benchmark.cost_analysis        # hybrid vs. naive LLM-emits-rows cost
+python -m benchmark.plots                # render figures/
+```
+
+- **Tabular TSTR (Train on Synthetic, Test on Real), two datasets.** A
+  `LogisticRegression` trained **only** on DataGen synthetic data, tested on real
+  held-out splits: **90.5% of real-data accuracy** on Breast Cancer (89.5% vs.
+  98.8%, univariate-friendly) and **75.3%** on Digits (73.9% vs. 98.2%,
+  interaction-heavy) — both far above baseline. Naive label-agnostic generation
+  collapses (24.9% / 15.1%), isolating the value of describing the distribution.
+  Marginal fidelity (mean per-feature Wasserstein) is **0.51 vs. 1.73** for uniform
+  sampling — ~3.4× closer to real. The Breast-Cancer→Digits drop is exactly the
+  joint-structure gap that motivates the inter-column-constraints roadmap item.
+- **NLP TSTR (real public dataset).** Trained only on DataGen synthetic sentiment
+  (offline engine) and tested on the real **UCI Sentiment Labelled Sentences**
+  (3,000 human-written reviews), a TF-IDF + LogisticRegression scores **60.4%** vs.
+  a 50% chance baseline — an honest cross-domain lower bound from the no-LLM
+  fallback; class balance (750/750) and label noise (exactly 5%) are exact.
+- **Parameter fidelity.** 0 cells of error on requested missing %; exact outlier
+  counts with 100% landing out of range; 100% range adherence over 40K values;
+  KS p≈0.99 against the target distribution; byte-identical reproduction across
+  seeds; ~148K rows/sec.
+- **Cost.** Confining the LLM to semantics makes generation **flat-cost in N**:
+  ~$0.0019 per run regardless of size, vs. a naive LLM-emits-every-row approach at
+  ~$0.15 for 10K rows (**~79× cheaper**, and no 16-call chunking around the token
+  limit).
+
 ## Roadmap
 
-- [ ] TSTR benchmark notebook (train on synthetic, test on real Kaggle data)
+- [x] TSTR benchmark (train on synthetic, test on real) — see `backend/benchmark/`
 - [ ] Inter-column constraints (e.g. `TotalAmount = Quantity × UnitPrice`)
 - [ ] Categorical distribution controls (class weights for label columns)
 - [ ] Streaming generation for >10K rows

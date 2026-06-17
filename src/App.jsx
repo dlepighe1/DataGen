@@ -1,5 +1,5 @@
 // frontend/src/App.jsx
-import React, { useEffect, useRef } from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { gsap } from 'gsap';
 
@@ -20,14 +20,22 @@ const AnimatedRoutes = () => {
   const location = useLocation();
   const pageRef = useRef(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     window.scrollTo({ top: 0 });
     if (pageRef.current) {
-      // Gentle reveal: a slow soft fade with a barely-there drift, no snap
+      // Smooth, gentle fadeInUp with a subtle bounce (back.out overshoot)
+      const items = pageRef.current.querySelectorAll('[data-animate]');
+      const targets = items.length ? items : [pageRef.current];
       gsap.fromTo(
-        pageRef.current,
-        { opacity: 0, y: 8, scale: 0.995 },
-        { opacity: 1, y: 0, scale: 1, duration: 0.85, ease: 'sine.out', clearProps: 'transform' }
+        targets,
+        { opacity: 0, y: 24 },
+        {
+          opacity: 1, y: 0,
+          duration: 0.55,
+          ease: 'back.out(1.4)',
+          stagger: items.length ? 0.08 : 0,
+          clearProps: 'transform',
+        }
       );
     }
   }, [location.pathname]);
@@ -51,14 +59,17 @@ const App = () => {
       {/* Global Background */}
       <HexagonBackground />
 
-      {/* Navbar */}
-      <Navbar />
+      {/* App shell: column layout so the footer anchors to the bottom */}
+      <div className="flex flex-col min-h-screen">
+        {/* Navbar */}
+        <Navbar />
 
-      {/* Page Content */}
-      <AnimatedRoutes />
+        {/* Page Content */}
+        <AnimatedRoutes />
 
-      {/* Footer */}
-      <Footer />
+        {/* Footer */}
+        <Footer />
+      </div>
     </BrowserRouter>
   );
 };
