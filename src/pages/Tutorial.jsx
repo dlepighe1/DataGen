@@ -83,7 +83,7 @@ const Tutorial = () => {
         <div data-animate className="grid sm:grid-cols-3 gap-4 mb-10 sm:mb-14">
           {[
             { icon: Settings, title: 'Manual Setup', desc: 'Build a schema column by column with full control over types and noise.', accent: '#38bdf8' },
-            { icon: Wand2, title: 'Templates', desc: 'Load a ready-made schema (e-commerce, healthcare…) and tweak it.', accent: '#a78bfa' },
+            { icon: Wand2, title: 'Templates', desc: 'Load a ready-made schema and adjust it to fit your specific needs.', accent: '#a78bfa' },
             { icon: Brain, title: 'NLP Tasks', desc: 'Generate labelled text datasets for classification, retrieval, QA, pairs.', accent: '#34d399' },
           ].map((m) => (
             <div key={m.title} className="glass-panel p-5 text-center">
@@ -152,8 +152,30 @@ const Tutorial = () => {
             icon={Wand2}
             badge="Mode 2"
             title="Templates"
-            subtitle="Load a ready-made schema and tweak it"
-          />
+            subtitle="Open the Templates tab, choose a domain, and click Load Template. The columns appear pre-typed and pre-ranged in Column Settings — then edit anything you like."
+          >
+            <div className="grid sm:grid-cols-2 gap-2.5 mb-5">
+              {[
+                'E-commerce — orders, products, customers',
+                'Healthcare — patients, vitals, treatments',
+                'Financial — transactions, merchants, fraud flags',
+                'Student Performance — grades, attendance',
+                'Athlete Stats — matches, goals, cards, injuries',
+                'Game Analytics — sessions, levels, purchases',
+                'Marketing — impressions, clicks, conversions',
+              ].map((t) => (
+                <div key={t} className="flex items-center gap-2 text-[13px] text-slate-300">
+                  <span className="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0" />
+                  {t}
+                </div>
+              ))}
+            </div>
+            <p className="text-[13px] text-slate-400 leading-relaxed">
+              Templates are the fastest start: load one, then adjust ranges, add missing values or
+              outliers per column, and add Custom Instructions to reshape the text (e.g.
+              <span className="text-sky-300"> "merchants are coffee shops in Chicago"</span>).
+            </p>
+          </SectionCard>
 
           {/* ── 3. NLP Tasks ── */}
           <SectionCard
