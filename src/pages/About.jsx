@@ -114,8 +114,8 @@ const About = () => {
             </CardHeader>
             <CardContent>
               <p className="text-slate-400 mb-6 text-[15px]">
-                DataGen pairs a React front end with a hybrid Python generation engine — an LLM
-                semantic layer plus a NumPy statistical core — for fast, reproducible results:
+                DataGen pairs a React front end with a hybrid Python generation engine (an LLM
+                semantic layer plus a NumPy statistical core) for fast, reproducible results:
               </p>
               <div className="grid md:grid-cols-2 gap-6 text-[15px]">
                 <div>

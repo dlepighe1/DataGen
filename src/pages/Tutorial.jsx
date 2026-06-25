@@ -15,7 +15,7 @@ function SectionCard({ icon: Icon, badge, title, subtitle, children }) {
           className="shrink-0 w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center"
           style={{ background: 'linear-gradient(135deg,#0ea5e9,#6366f1)', boxShadow: '0 0 16px rgba(14,165,233,0.35)' }}
         >
-          <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+          {Icon && <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-white" />}
         </div>
         <div className="min-w-0">
           {badge && (
@@ -132,17 +132,17 @@ const Tutorial = () => {
               <Param
                 name="Missing Values (%)"
                 what="The exact share of cells left blank (null)."
-                tip="Set 10–20% to practise imputation; the engine guarantees the precise count, not an approximation."
+                tip="Set 10-20% to practise imputation; the engine guarantees the precise count, not an approximation."
               />
               <Param
                 name="Add Noise / Noise Level"
                 what="Adds Gaussian jitter scaled to the column's range, so values wobble around their true value."
-                tip="Turn on with ~5–10% to simulate sensor error or measurement noise."
+                tip="Turn on with ~5-10% to simulate sensor error or measurement noise."
               />
               <Param
                 name="Add Outliers / Outlier (%)"
                 what="Injects an exact number of extreme values that fall outside the Min/Max range."
-                tip="Set 3–5% to test outlier detection or robust scaling in your pipeline."
+                tip="Set 3-5% to test outlier detection or robust scaling in your pipeline."
               />
             </div>
           </SectionCard>
@@ -152,30 +152,8 @@ const Tutorial = () => {
             icon={Wand2}
             badge="Mode 2"
             title="Templates"
-            subtitle="Open the Templates tab, choose a domain, and click Load Template. The columns appear pre-typed and pre-ranged in Column Settings — then edit anything you like."
-          >
-            <div className="grid sm:grid-cols-2 gap-2.5 mb-5">
-              {[
-                'E-commerce — orders, products, customers',
-                'Healthcare — patients, vitals, treatments',
-                'Financial — transactions, merchants, fraud flags',
-                'Student Performance — grades, attendance',
-                'Athlete Stats — matches, goals, cards, injuries',
-                'Game Analytics — sessions, levels, purchases',
-                'Marketing — impressions, clicks, conversions',
-              ].map((t) => (
-                <div key={t} className="flex items-center gap-2 text-[13px] text-slate-300">
-                  <span className="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0" />
-                  {t}
-                </div>
-              ))}
-            </div>
-            <p className="text-[13px] text-slate-400 leading-relaxed">
-              Templates are the fastest start: load one, then adjust ranges, add missing values or
-              outliers per column, and add Custom Instructions to reshape the text (e.g.
-              <span className="text-sky-300"> "merchants are coffee shops in Chicago"</span>).
-            </p>
-          </SectionCard>
+            subtitle="Load a ready-made schema and tweak it"
+          />
 
           {/* ── 3. NLP Tasks ── */}
           <SectionCard
@@ -187,12 +165,12 @@ const Tutorial = () => {
             <div className="grid sm:grid-cols-2 gap-3 mb-6">
               <Param
                 name="Text Classification"
-                what="Short texts each tagged with a class. You define the Class Labels (2–6 of them)."
+                what="Short texts each tagged with a class. You define the Class Labels (2-6 of them)."
                 tip="Balanced mode splits classes exactly evenly; Distorted skews them and flips ~5% of labels (label noise)."
               />
               <Param
                 name="Search & Retrieval"
-                what="Query–passage pairs marked relevant or not, for ranking and semantic-search models."
+                what="Query-passage pairs marked relevant or not, for ranking and semantic-search models."
                 tip="Use the Negative Examples slider to set the share of non-matching (hard-negative) pairs."
               />
               <Param
@@ -247,7 +225,7 @@ const Tutorial = () => {
                 icon={ClipboardCheck}
                 name="Data Quality Report"
                 what="Expand it to verify requested-vs-actual missing %, ranges, outliers, class balance, the seed, and which engine/model ran."
-                tip="This is your audit trail — proof the parameters were honoured exactly."
+                tip="This is your audit trail: proof the parameters were honoured exactly."
               />
               <Param icon={Download} name="Export" what="Download as CSV (spreadsheets/pandas), JSON (apps), or TXT (quick review)." />
             </div>
@@ -257,10 +235,10 @@ const Tutorial = () => {
           <SectionCard icon={Lightbulb} badge="Cheat sheet" title="Recipes: Want X? Do Y">
             <div>
               <Recipe goal="Clean training data" how="Templates or Manual, Balanced distribution, 0% missing, noise/outliers off." />
-              <Recipe goal="Data-cleaning practice" how="Distorted distribution, or set Missing 10–20% and enable Noise/Outliers per column." />
-              <Recipe goal="Reproducible dataset" how="Set a Seed and keep the same schema — anyone with both regenerates it byte-for-byte." />
+              <Recipe goal="Data-cleaning practice" how="Distorted distribution, or set Missing 10-20% and enable Noise/Outliers per column." />
+              <Recipe goal="Reproducible dataset" how="Set a Seed and keep the same schema, and anyone with both regenerates it byte-for-byte." />
               <Recipe goal="Balanced classifier set" how="NLP → Text Classification, your labels, Balanced mode for exact even classes." />
-              <Recipe goal="Hard negatives for retrieval" how="NLP → Search & Retrieval, raise the Negative Examples slider (e.g. 60–70%)." />
+              <Recipe goal="Hard negatives for retrieval" how="NLP → Search & Retrieval, raise the Negative Examples slider (e.g. 60-70%)." />
               <Recipe goal="Domain-specific text" how="Write the domain in Custom Instructions; it steers names, categories and examples." />
             </div>
           </SectionCard>
