@@ -14,12 +14,21 @@ dist-ssr
 .claude
 .github
 
+# Secrets / environment (never commit API keys, e.g. OPENROUTER_API_KEY)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
 # Python
 __pycache__/
 *.pyc
 .pytest_cache/
 # Benchmark download cache (datasets are fetched on demand)
 backend/benchmark/.data/
+
+DataGen - Sanity Case Study.md
 
 # Editor directories and files
 .vscode/*

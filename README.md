@@ -25,8 +25,8 @@ Early versions asked an LLM to emit raw CSV. That's statistically unsound: token
 ```
                        ┌──────────────────────────────────────────┐
  column schema  ─────► │  LLM (semantic layer)                    │
- custom instructions   │  GPT-4o-mini → GPT-3.5 → Llama 3.1       │
-                       │  → Mistral 7B (status-aware fallback)    │
+ custom instructions   │  Gemma 4 31B → GPT-OSS → Nemotron →      │
+                       │  Qwen → Llama 3.3 → GPT-4o-mini (paid)   │
                        │  Generates a small pool of COHERENT      │
                        │  text records (name ⇄ email match),      │
                        │  honoring custom instructions.           │
@@ -73,14 +73,14 @@ The LLM writes a pool of unique domain examples (your custom instructions set th
 - **Deliberately dirty data**: per-column sliders for missing %, Gaussian noise, and outliers, plus a global "distorted" mode that mangles text casing, mixes date formats, and dirties booleans for cleaning practice
 - **Custom instructions**: free-text steering of semantic content, passed verbatim to the LLM ("all patients are pediatric", "merchants are coffee shops")
 - **Seeded reproducibility**: share a seed and schema, and anyone can regenerate your exact dataset
-- **Resilient backend**: a 4-model fallback chain with status-code-aware retries, typed error taxonomy, matching recovery UI states, and a fully offline local engine when no model is reachable
+- **Resilient backend**: a 7-model fallback chain (free-tier models first, paid models as last resort) with status-code-aware retries, typed error taxonomy, matching recovery UI states, and a fully offline local engine when no model is reachable
 - **Rate limiting**: per-IP limits (10/min, 60/hr, 200/day) protect the free tier
 - **3 export formats**: RFC-4180-safe CSV, JSON, and TXT
 
 ## Tech Stack
 
 **Frontend:** React 19 · Vite · Tailwind CSS 4 · Radix UI · GSAP, deployed on Cloudflare Pages
-**Backend:** Flask · NumPy · Flask-Limiter · OpenAI SDK (via OpenRouter) · Gunicorn, deployed on Render
+**Backend:** Flask · NumPy · Flask-Limiter · OpenAI SDK (via OpenRouter) · Gunicorn, deployed on Railway
 
 ## Running Locally
 
@@ -136,7 +136,7 @@ Returns `{ status, table, report }` where `report` is the quality audit. Errors 
 
 ## Benchmarks
 
-Two reproducible benchmarks live in `backend/benchmark/` (deps:
+Four reproducible benchmarks live in `backend/benchmark/` (deps:
 `pip install -r backend/benchmark/requirements.txt`). All numbers in
 [`benchmark/RESULTS.md`](backend/benchmark/RESULTS.md) come straight from these
 scripts — nothing is hand-written.
@@ -160,18 +160,21 @@ python -m benchmark.plots                # render figures/
   sampling — ~3.4× closer to real. The Breast-Cancer→Digits drop is exactly the
   joint-structure gap that motivates the inter-column-constraints roadmap item.
 - **NLP TSTR (real public dataset).** Trained only on DataGen synthetic sentiment
-  (offline engine) and tested on the real **UCI Sentiment Labelled Sentences**
-  (3,000 human-written reviews), a TF-IDF + LogisticRegression scores **60.4%** vs.
-  a 50% chance baseline — an honest cross-domain lower bound from the no-LLM
-  fallback; class balance (750/750) and label noise (exactly 5%) are exact.
+  and tested on the real **UCI Sentiment Labelled Sentences** (3,000 human-written
+  reviews), a TF-IDF + LogisticRegression scores **60.4%** vs. a 50% chance baseline
+  from the no-LLM **offline** engine — an honest cross-domain lower bound. Swapping in
+  an **LLM-generated pool** (the free OpenRouter chain — gemma-4-31b — domain-matched,
+  400 examples) lifts it to **67.5%** (**+7.1 pts**), the text-transfer ceiling. Class
+  balance (750/750) and label noise (exactly 5%) are exact.
 - **Parameter fidelity.** 0 cells of error on requested missing %; exact outlier
   counts with 100% landing out of range; 100% range adherence over 40K values;
   KS p≈0.99 against the target distribution; byte-identical reproduction across
-  seeds; ~148K rows/sec.
+  seeds; ~119K rows/sec.
 - **Cost.** Confining the LLM to semantics makes generation **flat-cost in N**:
   ~$0.0019 per run regardless of size, vs. a naive LLM-emits-every-row approach at
   ~$0.15 for 10K rows (**~79× cheaper**, and no 16-call chunking around the token
-  limit).
+  limit). Priced at a representative paid model; on DataGen's free-tier chain the real
+  cost is effectively zero.
 
 ## Roadmap
 

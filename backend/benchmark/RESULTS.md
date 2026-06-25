@@ -29,7 +29,7 @@ Benchmark deps: `pip install -r benchmark/requirements.txt`
 | Range adherence (40,000 values, 4 columns) | **100.00%** in range |
 | Distributional fidelity (10K rows vs. target truncated-normal) | KS = **0.0044**, p = **0.99** — indistinguishable from the intended distribution |
 | Seed reproducibility | same seed → **byte-identical** table; different seed → differs |
-| Throughput (statistical core) | **~148,000 rows/sec** (10K rows in **0.067 s**) |
+| Throughput (statistical core) | **~119,000 rows/sec** (10K rows in **0.084 s**) |
 
 **Takeaway:** every knob DataGen exposes (missing %, outliers, range, distribution
 shape) is honoured exactly and reproducibly, at scale. This is the core guarantee
@@ -92,15 +92,18 @@ matching real marginals 3.4× better than uniform sampling.*
 ## 3. NLP TSTR — synthetic sentiment → real public reviews
 
 Train a TF-IDF + LogisticRegression classifier **only** on DataGen's NLP
-classification output (1,500 synthetic product-review sentiment rows, **offline**
-engine), then test on the real, public **UCI Sentiment Labelled Sentences** corpus
-(3,000 human-written amazon / imdb / yelp sentences, binary). The model never sees a
-real sentence in training. Chance baseline = **50%**.
+classification output (1,500 synthetic product-review sentiment rows), then test on
+the real, public **UCI Sentiment Labelled Sentences** corpus (3,000 human-written
+amazon / imdb / yelp sentences, binary). The model never sees a real sentence in
+training. We report two arms: the **offline** engine (always available, no API key)
+as a lower bound, and an **LLM pool** (the free OpenRouter chain — gemma-4-31b — with
+a domain-matched prompt and a 400-example pool) as the ceiling. Chance baseline = **50%**.
 
 | Training source | Accuracy | Macro-F1 |
 |---|---|---|
-| **DataGen synthetic → real reviews (UCI)** | **60.4%** | **0.60** |
-| Shuffled-label control | 54.8% | — |
+| DataGen **offline** engine → real reviews (UCI) | **60.4%** | **0.60** |
+| DataGen **LLM pool** (gemma-4-31b, domain-matched) → real reviews | **67.5%** | **0.68** |
+| Shuffled-label control (offline) | 54.8% | — |
 | Chance baseline | 50.0% | — |
 
 **Control checks (exactness of the NLP knobs):** balanced mode produced exactly
@@ -109,12 +112,13 @@ exactly **75 label flips = 5%** label noise.
 
 **Takeaway (honest):** even the **offline fallback** engine — templated text, no LLM —
 produces sentiment that transfers to real, unseen, cross-domain reviews **above
-chance** (+10 pts), and its balance / label-noise controls are exact. This is a
-deliberately conservative number: the production path is the **LLM-backed hybrid**
-engine, which writes diverse, domain-specific text and would transfer substantially
-better (it needs an `OPENROUTER_API_KEY`, so it is omitted here to keep the benchmark
-reproducible and free). The tabular TSTR above is the rigorous, fully-offline
-centerpiece; this NLP result is an honest lower bound on the text side.
+chance** (+10 pts), and its balance / label-noise controls are exact. Pointing the
+same pipeline at an **LLM-generated pool** (the free OpenRouter chain — gemma-4-31b —
+with a domain-matched prompt and a 400-example pool) lifts transfer to **67.5%, +7.1
+points** over the offline engine, confirming the higher text-transfer ceiling when the
+domain is described well. The offline number stays the reproducible, key-free lower
+bound (run without an `OPENROUTER_API_KEY`); the LLM ceiling is measured by setting the
+key. The tabular TSTR above remains the rigorous, fully-offline centerpiece.
 
 ---
 
@@ -123,7 +127,9 @@ centerpiece; this NLP result is an honest lower bound on the text side.
 DataGen calls the LLM **once** per generation, for a ≤80-record pool of text
 columns; NumPy expands that into N structured rows for free. A naive approach emits
 every row as tokens. Token counts are estimated at ~4 chars/token from real samples
-and priced at published **GPT-4o-mini** rates ($0.15 / $0.60 per 1M in/out).
+and priced at published **GPT-4o-mini** rates ($0.15 / $0.60 per 1M in/out) as a
+representative paid model — DataGen's own generation now runs on free-tier
+OpenRouter models, so this is a conservative what-if baseline.
 
 | Rows | DataGen | Naive LLM | Naive calls needed | DataGen cheaper |
 |---|---|---|---|---|

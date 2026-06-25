@@ -1106,7 +1106,7 @@ const Generate = () => {
                       className="text-left text-xs rounded-lg p-3 w-full max-w-xs"
                       style={{ background: 'rgba(234,179,8,0.07)', border: '1px solid rgba(234,179,8,0.15)' }}
                     >
-                      <p className="text-amber-400/80">All AI models (gpt-4o-mini, gpt-3.5-turbo, and free fallbacks) are currently unavailable on OpenRouter. This is a temporary upstream issue.</p>
+                      <p className="text-amber-400/80">All AI models in the OpenRouter fallback chain are currently unavailable. This is a temporary upstream issue.</p>
                     </div>
                   )}
 

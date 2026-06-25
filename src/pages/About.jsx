@@ -131,9 +131,9 @@ const About = () => {
                   <h4 className="font-semibold mb-3 text-indigo-300">Backend</h4>
                   <ul className="text-slate-400 space-y-2">
                     <li className="flex items-center"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2"></div>Flask API with NumPy core</li>
-                    <li className="flex items-center"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2"></div>4-model LLM fallback (OpenRouter)</li>
+                    <li className="flex items-center"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2"></div>7-model LLM fallback (OpenRouter)</li>
                     <li className="flex items-center"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2"></div>Exact, seeded reproducibility</li>
-                    <li className="flex items-center"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2"></div>Deployed on Render</li>
+                    <li className="flex items-center"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2"></div>Deployed on Railway</li>
                   </ul>
                 </div>
               </div>

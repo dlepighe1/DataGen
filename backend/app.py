@@ -1,7 +1,7 @@
 """DataGen API — hybrid synthetic data generation.
 
 Architecture:
-  1. The LLM (4-model fallback chain) generates a small pool of *coherent
+  1. The LLM (multi-model fallback chain) generates a small pool of *coherent
      semantic records* for text/email columns only, honoring custom
      instructions. It never emits raw CSV.
   2. generator.py synthesizes every number/date/boolean/ID column with NumPy:
@@ -30,7 +30,7 @@ from nlp_tasks import (
 
 app = Flask(__name__)
 app.json.sort_keys = False  # preserve column order in responses/exports
-# Trust the first proxy (Render/Heroku) so rate limiting keys on the real client IP
+# Trust the first proxy (Railway) so rate limiting keys on the real client IP
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 
 CORS(app, origins=[
@@ -50,10 +50,16 @@ limiter = Limiter(
 # Models to try in order. Falls back automatically.
 # ─────────────────────────────────────────────
 CANDIDATE_MODELS = [
-    "openai/gpt-4o-mini",                      # Best quality, low cost — try first
-    "openai/gpt-3.5-turbo",                    # Solid fallback
-    "meta-llama/llama-3.1-8b-instruct:free",   # Free tier fallback
-    "mistralai/mistral-7b-instruct:free",      # Free tier fallback
+    # ── New free-tier chain (preferred — tried first) ──
+    "google/gemma-4-31b-it:free",              # Fast, clean JSON
+    "openai/gpt-oss-120b:free",                # Strong open-weight fallback
+    "nvidia/nemotron-3-ultra-550b-a55b:free",  # Large-scale fallback
+    "qwen/qwen3-next-80b-a3b-instruct:free",   # Free fallback
+    # ── Original free fallback, refreshed (llama-3.1-8b:free / mistral-7b:free retired) ──
+    "meta-llama/llama-3.3-70b-instruct:free",  # Live successor to the old Llama free tier
+    # ── Original paid models, kept as a representative paid last resort ──
+    "openai/gpt-4o-mini",
+    "openai/gpt-3.5-turbo",
 ]
 
 LLM_TIMEOUT_SECONDS = 45

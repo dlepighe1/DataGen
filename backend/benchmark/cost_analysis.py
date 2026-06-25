@@ -7,8 +7,10 @@ grows linearly with row count (and quickly exceeds a single completion's output
 limit).
 
 Token counts are estimated at ~4 chars/token (tiktoken not required) from real
-generated samples, and priced with published GPT-4o-mini rates. Treat the dollar
-figures as well-grounded estimates, not invoices.
+generated samples, and priced with published GPT-4o-mini rates as a representative
+paid model (DataGen itself now runs on free-tier OpenRouter models, so this is a
+conservative what-if baseline). Treat the dollar figures as well-grounded
+estimates, not invoices.
 
 Run from backend/:  python -m benchmark.cost_analysis
 """
@@ -18,7 +20,8 @@ import json
 from generator import generate_dataset
 from text_pools import build_local_records, expand_records
 
-# Published GPT-4o-mini rates (USD per 1M tokens), as used by DataGen's primary model.
+# Published GPT-4o-mini rates (USD per 1M tokens) — a representative paid model for
+# the comparison; DataGen's own generation now runs on free-tier OpenRouter models.
 PRICE_IN = 0.15 / 1_000_000
 PRICE_OUT = 0.60 / 1_000_000
 CHARS_PER_TOKEN = 4
@@ -92,7 +95,7 @@ def main():
         }
 
     report = {
-        "model_priced": "gpt-4o-mini ($0.15/1M in, $0.60/1M out)",
+        "model_priced": "gpt-4o-mini — representative paid model ($0.15/1M in, $0.60/1M out)",
         "estimation": "~4 chars/token from real generated samples",
         "avg_pool_record_tokens": round(pool_tok, 1),
         "avg_full_row_tokens": round(row_tok, 1),
