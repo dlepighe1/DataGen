@@ -3,3 +3,13 @@ numpy==2.2.6
 scipy==1.16.1
 scikit-learn==1.7.1
 matplotlib==3.10.5
+# Competitor baselines: the Gaussian copula DataGen is positioned against, and
+# the rule-based faker it is positioned against. Both are given the same (or a
+# better) view of the data than DataGen gets, on purpose.
+# rdt is SDV's transformer library — it lets the copula handle categorical columns
+# exactly as SDV's GaussianCopulaSynthesizer does, so the competitor is faithful
+# rather than a strawman built from ordinal codes.
+copulas==0.14.1
+rdt==1.21.0
+faker==40.28.1
+pandas==2.3.3

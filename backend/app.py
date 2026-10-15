@@ -13,6 +13,7 @@ Architecture:
 import json
 import os
 import re
+import time
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -21,7 +22,8 @@ from flask_limiter.util import get_remote_address
 from werkzeug.middleware.proxy_fix import ProxyFix
 from openai import OpenAI, APIConnectionError, APITimeoutError, APIStatusError
 
-from generator import generate_dataset, is_text_column, MAX_ROWS, MAX_COLUMNS
+from generator import (generate_dataset, is_text_column, FormulaError,
+                       MAX_ROWS, MAX_COLUMNS)
 from text_pools import build_local_records, expand_records
 from nlp_tasks import (
     NLP_TASKS, POOL_KEYS, DEFAULT_LABELS, DEFAULT_NEGATIVE_RATIO,
@@ -62,9 +64,14 @@ CANDIDATE_MODELS = [
     "openai/gpt-3.5-turbo",
 ]
 
-LLM_TIMEOUT_SECONDS = 45
+LLM_TIMEOUT_SECONDS = 20
+# Total time the whole model chain may spend before falling back to local pools.
+# Must stay well under the frontend's 120s abort, or the fallback never gets a chance.
+LLM_TOTAL_BUDGET_SECONDS = 60
 MAX_INSTRUCTIONS_CHARS = 600
 MAX_COLUMN_NAME_CHARS = 64
+MAX_CORRELATIONS = 100
+MAX_FORMULA_CHARS = 200
 
 
 @app.errorhandler(429)
@@ -142,22 +149,37 @@ def parse_record_pool(raw_text, text_columns):
     return normalized
 
 
+def openrouter_client(api_key):
+    # No SDK retries: a stalled free model would otherwise be retried twice with
+    # backoff before the loop moves on. The model chain is the retry strategy.
+    return OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key, max_retries=0)
+
+
 def fetch_record_pool(client, prompt, pseudo_columns):
-    """Try each model in order. Returns (records, model_used) or (None, None)."""
+    """Try each model in order. Returns (records, model_used) or (None, None).
+
+    Bounded by LLM_TOTAL_BUDGET_SECONDS overall, so a slow chain degrades to the
+    local pools instead of outliving the client's request.
+    """
+    deadline = time.monotonic() + LLM_TOTAL_BUDGET_SECONDS
     for model in CANDIDATE_MODELS:
+        remaining = deadline - time.monotonic()
+        if remaining < 3:
+            app.logger.warning(f"LLM budget of {LLM_TOTAL_BUDGET_SECONDS}s spent; using local pools.")
+            break
         try:
             response = client.chat.completions.create(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=1.0,
-                timeout=LLM_TIMEOUT_SECONDS,
+                timeout=min(LLM_TIMEOUT_SECONDS, remaining),
             )
             content = response.choices[0].message.content or ""
             records = parse_record_pool(content, pseudo_columns)
             app.logger.info(f"Semantic pool from '{model}': {len(records)} records")
             return records, model
         except APITimeoutError:
-            app.logger.warning(f"Model '{model}' timed out after {LLM_TIMEOUT_SECONDS}s.")
+            app.logger.warning(f"Model '{model}' timed out.")
             continue
         except APIConnectionError as e:
             app.logger.warning(f"Connection error calling '{model}': {e}")
@@ -196,6 +218,12 @@ def validate_payload(payload):
         seen.add(name.lower())
         col["name"] = name
 
+        if col.get("type") == "derived":
+            formula = str(col.get("formula") or "").strip()[:MAX_FORMULA_CHARS]
+            if not formula:
+                return f"Column '{name}' is a formula column but has no formula.", None
+            col["formula"] = formula
+
     try:
         row_count = int(payload.get("rowCount", 100))
     except (TypeError, ValueError):
@@ -217,12 +245,27 @@ def validate_payload(payload):
     if distribution not in ("balanced", "distorted"):
         distribution = "balanced"
 
+    # Optional joint structure: [{"a": col, "b": col, "rho": 0.4}]. Unknown columns
+    # and unparseable rho values are dropped rather than failing the whole request.
+    correlations = []
+    for entry in (payload.get("correlations") or [])[:MAX_CORRELATIONS]:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            rho = float(entry.get("rho"))
+        except (TypeError, ValueError):
+            continue
+        correlations.append({"a": str(entry.get("a") or ""),
+                             "b": str(entry.get("b") or ""),
+                             "rho": max(-0.99, min(0.99, rho))})
+
     return None, {
         "columns": columns,
         "row_count": row_count,
         "seed": seed,
         "custom_instructions": custom_instructions,
         "distribution": distribution,
+        "correlations": correlations,
         "template": str(payload.get("template") or "")[:64],
     }
 
@@ -247,7 +290,7 @@ def generate_table():
         api_key = os.environ.get("OPENROUTER_API_KEY")
         n_records = min(80, max(20, row_count))
         if api_key:
-            client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
+            client = openrouter_client(api_key)
             prompt = build_semantic_prompt(
                 text_columns, columns, config["template"], config["custom_instructions"], n_records,
             )
@@ -267,7 +310,15 @@ def generate_table():
             distribution_type=config["distribution"],
             seed=seed,
             text_records=records,
+            correlations=config["correlations"],
         )
+    except FormulaError as e:
+        # The user mistyped a formula. That's their input, not our bug — say what's wrong.
+        return jsonify({
+            "error": "Invalid formula",
+            "details": str(e),
+            "error_type": "validation",
+        }), 400
     except Exception as e:
         app.logger.exception("Generation failed")
         return jsonify({
@@ -353,7 +404,7 @@ def generate_nlp_table():
     api_key = os.environ.get("OPENROUTER_API_KEY")
     n_pool = min(60, max(20, row_count // 4))
     if api_key:
-        client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
+        client = openrouter_client(api_key)
         prompt = build_nlp_prompt(task, n_pool, config["labels"], config["custom_instructions"])
         pseudo_columns = [{"name": k} for k in POOL_KEYS[task]]
         pool, model_used = fetch_record_pool(client, prompt, pseudo_columns)

@@ -36,7 +36,8 @@ Early versions asked an LLM to emit raw CSV. That's statistically unsound: token
                                            │ ~1,500 unique identities
                        ┌───────────────────▼──────────────────────┐
                        │  NumPy (statistical core)                │
-                       │  • numbers: truncated normal in range    │
+                       │  • numbers: truncated normal, centred    │
+                       │    on the schema's mean/std if given     │
                        │  • missing values: EXACT requested %     │
                        │  • outliers: exact count, out-of-range   │
                        │  • noise: Gaussian, % of column span     │
@@ -68,7 +69,10 @@ The LLM writes a pool of unique domain examples (your custom instructions set th
 
 ## Features
 
-- **7 dataset templates**: e-commerce, healthcare, finance, education, sports, gaming, and marketing, plus fully manual schemas (text, number, email, date, boolean)
+- **7 dataset templates**: e-commerce, healthcare, finance, education, sports, gaming, and marketing, plus fully manual schemas (text, number, email, date, boolean, categorical, formula)
+- **Describe a distribution, not just a range**: optional `mean` / `stdDev` per numeric column, exact class weights per categorical column, and optional pairwise correlations
+- **Formula columns**: `TotalAmount = Quantity * UnitPrice` holds exactly in every row — an arithmetic identity, not a statistical tendency (parsed safely; never `eval`'d)
+- **Fit from a sample**: hand it a CSV you already have and it drafts the whole schema (types, ranges, averages, class balance, strongest relationships). The file is parsed **in your browser and never uploaded** — only the *description* of your data is used, never the data
 - **4 NLP task types**: classification, semantic retrieval, QA, and paraphrase pairs with controllable class balance and negative ratios
 - **Deliberately dirty data**: per-column sliders for missing %, Gaussian noise, and outliers, plus a global "distorted" mode that mangles text casing, mixes date formats, and dirties booleans for cleaning practice
 - **Custom instructions**: free-text steering of semantic content, passed verbatim to the LLM ("all patients are pediatric", "merchants are coffee shops")
@@ -126,11 +130,53 @@ Covers exact missing-value percentages, range adherence, outlier injection count
     { "name": "CustomerName", "type": "string" },
     { "name": "Email", "type": "email" },
     { "name": "UnitPrice", "type": "number", "numberType": "decimals",
-      "minValue": 5, "maxValue": 500, "nanPercentage": 10,
+      "minValue": 5, "maxValue": 500,
+      "mean": 40, "stdDev": 25,        // optional: where the mass actually sits
+      "nanPercentage": 10,
       "addOutliers": true, "outlierPercentage": 5 }
   ]
 }
 ```
+
+`mean` and `stdDev` are optional and are the highest-leverage fields in the schema.
+Without them the engine centres a bell on the midpoint of `[minValue, maxValue]`,
+which is wrong for any skewed column and measurably costs downstream accuracy
+(see `RESULTS.md` §3). You do not need a dataset to supply them — "orders average
+$40, most land between $20 and $60" is something you already know.
+
+**Categorical columns** take an exact class balance:
+
+```jsonc
+{ "name": "Tier", "type": "categorical",
+  "categories": ["bronze", "silver", "gold"],
+  "categoryWeights": [0.6, 0.3, 0.1] }   // honoured to the row, not in expectation
+```
+
+**Formula columns** compute a value exactly, per row, from the numeric columns above them:
+
+```jsonc
+{ "name": "TotalAmount", "type": "derived", "numberType": "decimals",
+  "formula": "Quantity * UnitPrice" }   // holds in every row, not on average
+```
+
+Supports `+ - * / ( )` over numeric columns and literals, and a formula may reference an
+earlier formula column. It is parsed by a hand-written recursive-descent parser, never
+`eval`'d — a formula arrives in an untrusted request body. A mistyped formula returns a
+`validation` error naming the unknown column; a division by zero leaves the cell blank
+rather than failing the run.
+
+**Correlations** are optional and stated per pair, alongside `columns`:
+
+```jsonc
+"correlations": [ { "a": "UnitPrice", "b": "Quantity", "rho": -0.3 } ]
+```
+
+They are induced by Iman-Conover rank matching, which *reorders* rows rather than
+rewriting values — so exact missing counts, exact outlier counts and range adherence
+all survive untouched. An impossible set of correlations degrades to the nearest
+achievable one instead of failing. The quality report audits requested vs. achieved r.
+Note the honest finding in `RESULTS.md` §4: correlations make rows more *plausible*,
+but they do **not** meaningfully improve a downstream classifier.
 
 Returns `{ status, table, report }` where `report` is the quality audit. Errors carry a typed `error_type` (`validation`, `rate_limited`, `connection`, `model_unavailable`, `config`, `unknown`) that the UI maps to specific recovery states.
 
@@ -143,22 +189,41 @@ scripts — nothing is hand-written.
 
 ```bash
 cd backend
-python -m benchmark.fidelity_benchmark   # exactness, distribution fit, reproducibility, throughput
-python -m benchmark.tstr_benchmark       # tabular Train on Synthetic, Test on Real
-python -m benchmark.nlp_tstr_benchmark   # NLP TSTR: synthetic sentiment -> real reviews
-python -m benchmark.cost_analysis        # hybrid vs. naive LLM-emits-rows cost
-python -m benchmark.plots                # render figures/
+python -m benchmark.fidelity_benchmark     # exactness, distribution fit, reproducibility, throughput
+python -m benchmark.mixed_tstr_benchmark   # UCI Adult: mixed numeric + categorical TSTR
+python -m benchmark.tstr_benchmark         # numeric TSTR + the correlation sweep
+python -m benchmark.nlp_tstr_benchmark     # NLP TSTR: synthetic sentiment -> real reviews
+python -m benchmark.cost_analysis          # hybrid vs. naive LLM-emits-rows cost
+python -m benchmark.plots                  # render figures/
 ```
 
-- **Tabular TSTR (Train on Synthetic, Test on Real), two datasets.** A
-  `LogisticRegression` trained **only** on DataGen synthetic data, tested on real
-  held-out splits: **90.5% of real-data accuracy** on Breast Cancer (89.5% vs.
-  98.8%, univariate-friendly) and **75.3%** on Digits (73.9% vs. 98.2%,
-  interaction-heavy) — both far above baseline. Naive label-agnostic generation
-  collapses (24.9% / 15.1%), isolating the value of describing the distribution.
-  Marginal fidelity (mean per-feature Wasserstein) is **0.51 vs. 1.73** for uniform
-  sampling — ~3.4× closer to real. The Breast-Cancer→Digits drop is exactly the
-  joint-structure gap that motivates the inter-column-constraints roadmap item.
+Every arm runs over **5 seeds** and **3 model families** (LogisticRegression,
+RandomForest, HistGradientBoosting), reported as mean ± std, against two real
+competitors: a **Gaussian copula** (SDV's `copulas` + `rdt`) *fit on the real dataset*,
+and **Faker** given the identical bounds.
+
+- **Mixed-type TSTR on UCI Adult — the centerpiece.** 48,842 real rows, 6 numeric +
+  8 categorical, 76/24 imbalanced. Trained **only** on DataGen output and tested on a
+  real held-out split, DataGen reaches **98.5% of real-data macro-F1**, *beating* a
+  **Gaussian copula that was fit on the real dataset* (96.7%) — because DataGen honours
+  the categorical class weights **exactly** (total-variation distance **0.000**) while
+  the copula's Gaussian treatment of categories is lossy. **Faker**, handed the same
+  bounds, collapses to 69.4%. See `RESULTS.md` §2.
+- **The benchmark falsified an earlier claim, and the engine changed because of it.**
+  On *purely numeric* data with *bounds only*, DataGen was statistically
+  indistinguishable from Faker (89.4% vs. 89.9%), because the bell was always centred
+  on the midpoint of the range. Letting the schema state `mean` / `stdDev` — which a
+  user knows without owning a dataset — moved marginal fidelity from **0.52 to 0.14**
+  and rescued the tree models on Digits from **36.6% to 88.6%**. `RESULTS.md` §3.
+- **Correlations: an honest negative result.** The schema can now state pairwise
+  correlations, induced by Iman-Conover rank matching (marginals unchanged, so every
+  exactness guarantee survives). Measured, they buy **1–2 points at best, and nothing
+  for linear models** — because for a classifier the signal lives in the
+  class-conditional marginals, not in within-class correlations. State them for
+  *plausible rows*, not for a better classifier. `RESULTS.md` §4.
+- **Schema sensitivity.** Univariate data forgives a vague schema (50% wrong still
+  trains a 93.7% classifier); interaction-heavy data does not (a ±10% error halves
+  gradient-boosting accuracy). `figures/schema-sensitivity.png`.
 - **NLP TSTR (real public dataset).** Trained only on DataGen synthetic sentiment
   and tested on the real **UCI Sentiment Labelled Sentences** (3,000 human-written
   reviews), a TF-IDF + LogisticRegression scores **60.4%** vs. a 50% chance baseline
@@ -169,7 +234,7 @@ python -m benchmark.plots                # render figures/
 - **Parameter fidelity.** 0 cells of error on requested missing %; exact outlier
   counts with 100% landing out of range; 100% range adherence over 40K values;
   KS p≈0.99 against the target distribution; byte-identical reproduction across
-  seeds; ~119K rows/sec.
+  seeds; 10K rows in 0.06 s.
 - **Cost.** Confining the LLM to semantics makes generation **flat-cost in N**:
   ~$0.0019 per run regardless of size, vs. a naive LLM-emits-every-row approach at
   ~$0.15 for 10K rows (**~79× cheaper**, and no 16-call chunking around the token
@@ -179,6 +244,18 @@ python -m benchmark.plots                # render figures/
 ## Roadmap
 
 - [x] TSTR benchmark (train on synthetic, test on real) — see `backend/benchmark/`
-- [ ] Inter-column constraints (e.g. `TotalAmount = Quantity × UnitPrice`)
-- [ ] Categorical distribution controls (class weights for label columns)
+- [x] Competitor baselines (Gaussian copula, Faker) and multi-model, multi-seed evaluation
+- [x] Distribution moments in the schema (`mean` / `stdDev`) — the fix the benchmark forced
+- [x] Categorical columns with exact class weights
+- [x] Mixed-type benchmark on a real dataset (UCI Adult) — the data the product actually makes
+- [x] Stated correlations (Iman-Conover), plus the sweep that showed they don't buy accuracy
+- [x] Surface `mean` / `stdDev`, category weights and correlations in the UI
+- [x] Deterministic constraints via **formula columns** (`TotalAmount = Quantity * UnitPrice`),
+      which stated correlations approximate but cannot express exactly
+- [x] **Fit-from-sample**: point DataGen at a CSV you already have and it drafts the schema.
+      Parsed **in the browser** — the file is never uploaded. Schema-first stays the default;
+      the sample only *writes the schema*, and the engine still generates from the schema alone.
+- [ ] **Privacy metrics** (distance-to-closest-record, membership inference) — the one axis
+      where a schema-first generator should beat a copula outright, currently unmeasured
+- [ ] A regression TSTR task (all three tabular benchmarks are classification)
 - [ ] Streaming generation for >10K rows

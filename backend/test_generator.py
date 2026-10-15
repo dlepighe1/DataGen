@@ -43,6 +43,232 @@ class TestNumericColumns:
         rows, _ = generate_dataset([num_col(numberType="decimals")], 200, seed=1)
         assert all(isinstance(r["Score"], float) for r in rows)
 
+    def test_defaults_to_midpoint_when_no_moments_given(self):
+        rows, report = generate_dataset([num_col(numberType="decimals")], 5000, seed=7)
+        assert report["columns"][0]["mean"] == pytest.approx(50, abs=2)
+
+    def test_mean_shifts_the_distribution(self):
+        col = num_col(numberType="decimals", mean=20, stdDev=5)
+        rows, report = generate_dataset([col], 5000, seed=7)
+        assert report["columns"][0]["mean"] == pytest.approx(20, abs=1)
+        assert report["columns"][0]["std"] == pytest.approx(5, abs=1)
+
+    def test_moments_are_echoed_in_the_report(self):
+        col = num_col(numberType="decimals", mean=20, stdDev=5)
+        _, report = generate_dataset([col], 100, seed=7)
+        assert report["columns"][0]["requested_mean"] == 20
+        assert report["columns"][0]["requested_std"] == 5
+
+    def test_moments_still_respect_the_range(self):
+        col = num_col(numberType="decimals", mean=95, stdDev=40)
+        rows, _ = generate_dataset([col], 2000, seed=7)
+        assert all(0 <= r["Score"] <= 100 for r in rows)
+
+
+def _pearson(rows, a, b):
+    xs = [r[a] for r in rows if r[a] is not None and r[b] is not None]
+    ys = [r[b] for r in rows if r[a] is not None and r[b] is not None]
+    import numpy as np
+    return float(np.corrcoef(xs, ys)[0, 1])
+
+
+class TestCorrelations:
+    def cols(self):
+        return [num_col("Price", numberType="decimals", minValue=0, maxValue=100,
+                        mean=40, stdDev=15),
+                num_col("Quantity", numberType="decimals", minValue=0, maxValue=50,
+                        mean=20, stdDev=8)]
+
+    def test_positive_correlation_is_induced(self):
+        rows, _ = generate_dataset(self.cols(), 2000, seed=5,
+                                   correlations=[{"a": "Price", "b": "Quantity", "rho": 0.8}])
+        assert _pearson(rows, "Price", "Quantity") == pytest.approx(0.8, abs=0.08)
+
+    def test_negative_correlation_is_induced(self):
+        rows, _ = generate_dataset(self.cols(), 2000, seed=5,
+                                   correlations=[{"a": "Price", "b": "Quantity", "rho": -0.6}])
+        assert _pearson(rows, "Price", "Quantity") == pytest.approx(-0.6, abs=0.08)
+
+    def test_uncorrelated_by_default(self):
+        rows, _ = generate_dataset(self.cols(), 2000, seed=5)
+        assert abs(_pearson(rows, "Price", "Quantity")) < 0.08
+
+    def test_report_audits_requested_vs_actual(self):
+        _, report = generate_dataset(self.cols(), 2000, seed=5,
+                                     correlations=[{"a": "Price", "b": "Quantity", "rho": 0.5}])
+        entry = report["correlations"][0]
+        assert entry["requested_r"] == 0.5
+        assert entry["actual_r"] == pytest.approx(0.5, abs=0.08)
+
+    def test_marginals_are_untouched_by_correlation(self):
+        """Rank matching permutes rows; it must not change any column's values."""
+        plain, _ = generate_dataset(self.cols(), 1000, seed=5)
+        corr, _ = generate_dataset(self.cols(), 1000, seed=5,
+                                   correlations=[{"a": "Price", "b": "Quantity", "rho": 0.7}])
+        assert sorted(r["Price"] for r in plain) == sorted(r["Price"] for r in corr)
+        assert sorted(r["Quantity"] for r in plain) == sorted(r["Quantity"] for r in corr)
+
+    def test_exactness_guarantees_survive(self):
+        cols = [num_col("Price", numberType="decimals", minValue=0, maxValue=100,
+                        mean=40, stdDev=15, nanPercentage=10),
+                num_col("Quantity", numberType="decimals", minValue=0, maxValue=50,
+                        mean=20, stdDev=8, addOutliers=True, outlierPercentage=5)]
+        rows, report = generate_dataset(cols, 1000, seed=5,
+                                        correlations=[{"a": "Price", "b": "Quantity", "rho": 0.6}])
+        assert sum(1 for r in rows if r["Price"] is None) == 100
+        assert report["columns"][1]["outliers_injected"] == 50
+
+    def test_impossible_matrix_degrades_instead_of_crashing(self):
+        cols = self.cols() + [num_col("Rating", numberType="decimals", minValue=0,
+                                      maxValue=10, mean=5, stdDev=2)]
+        rows, report = generate_dataset(
+            cols, 500, seed=5,
+            correlations=[{"a": "Price", "b": "Quantity", "rho": 0.9},
+                          {"a": "Quantity", "b": "Rating", "rho": 0.9},
+                          {"a": "Price", "b": "Rating", "rho": -0.9}])  # not achievable
+        assert len(rows) == 500
+        assert len(report["correlations"]) == 3
+
+    def test_integer_columns_stay_integers(self):
+        """Rank matching must not turn 2 into 2.0 — that exports as "2.0"."""
+        cols = [num_col("Qty", numberType="integers", minValue=1, maxValue=5),
+                num_col("Price", numberType="decimals", minValue=5, maxValue=50)]
+        rows, _ = generate_dataset(cols, 300, seed=5,
+                                   correlations=[{"a": "Qty", "b": "Price", "rho": -0.4}])
+        assert all(isinstance(r["Qty"], int) for r in rows)
+        assert all(isinstance(r["Price"], float) for r in rows)
+
+    def test_unknown_columns_are_ignored(self):
+        rows, report = generate_dataset(self.cols(), 200, seed=5,
+                                        correlations=[{"a": "Price", "b": "Nope", "rho": 0.5}])
+        assert len(rows) == 200
+        assert "correlations" not in report
+
+
+class TestDerivedColumns:
+    def base(self):
+        return [
+            num_col("Quantity", numberType="integers", minValue=1, maxValue=5),
+            num_col("UnitPrice", numberType="decimals", minValue=5, maxValue=100),
+        ]
+
+    def test_arithmetic_holds_in_every_row(self):
+        cols = self.base() + [{"name": "Total", "type": "derived",
+                               "formula": "Quantity * UnitPrice", "numberType": "decimals"}]
+        rows, _ = generate_dataset(cols, 500, seed=9)
+        for r in rows:
+            assert r["Total"] == pytest.approx(r["Quantity"] * r["UnitPrice"], abs=0.01)
+
+    def test_supports_precedence_and_parentheses(self):
+        cols = self.base() + [{"name": "Out", "type": "derived",
+                               "formula": "(Quantity + 2) * UnitPrice / 2",
+                               "numberType": "decimals"}]
+        rows, _ = generate_dataset(cols, 200, seed=9)
+        for r in rows:
+            assert r["Out"] == pytest.approx((r["Quantity"] + 2) * r["UnitPrice"] / 2, abs=0.01)
+
+    def test_derived_column_keeps_declared_position(self):
+        cols = [self.base()[0],
+                {"name": "Total", "type": "derived", "formula": "Quantity * 2"},
+                self.base()[1]]
+        rows, _ = generate_dataset(cols, 10, seed=9)
+        assert list(rows[0].keys()) == ["Quantity", "Total", "UnitPrice"]
+
+    def test_derived_can_reference_another_derived(self):
+        cols = self.base() + [
+            {"name": "Total", "type": "derived", "formula": "Quantity * UnitPrice"},
+            {"name": "WithTax", "type": "derived", "formula": "Total * 1.2"},
+        ]
+        rows, _ = generate_dataset(cols, 100, seed=9)
+        for r in rows:
+            assert r["WithTax"] == pytest.approx(r["Total"] * 1.2, abs=0.05)
+
+    def test_missing_values_are_still_exact(self):
+        cols = self.base() + [{"name": "Total", "type": "derived",
+                               "formula": "Quantity * UnitPrice", "nanPercentage": 10}]
+        rows, report = generate_dataset(cols, 500, seed=9)
+        assert sum(1 for r in rows if r["Total"] is None) == 50
+        assert report["columns"][2]["actual_missing_pct"] == 10.0
+
+    def test_report_records_the_formula_and_sources(self):
+        cols = self.base() + [{"name": "Total", "type": "derived",
+                               "formula": "Quantity * UnitPrice"}]
+        _, report = generate_dataset(cols, 50, seed=9)
+        assert report["columns"][2]["formula"] == "Quantity * UnitPrice"
+        assert report["columns"][2]["derived_from"] == ["Quantity", "UnitPrice"]
+
+    def test_division_by_zero_becomes_a_hole_not_a_crash(self):
+        cols = [num_col("Zero", numberType="integers", minValue=0, maxValue=0),
+                num_col("X", numberType="integers", minValue=1, maxValue=9),
+                {"name": "Bad", "type": "derived", "formula": "X / Zero"}]
+        rows, report = generate_dataset(cols, 50, seed=9)
+        assert all(r["Bad"] is None for r in rows)
+        assert report["columns"][2]["undefined_cells"] == 50
+
+    def test_unknown_column_is_rejected(self):
+        cols = self.base() + [{"name": "T", "type": "derived", "formula": "Quantity * Ghost"}]
+        with pytest.raises(ValueError, match="Ghost"):
+            generate_dataset(cols, 10, seed=9)
+
+    def test_formula_cannot_execute_code(self):
+        """A formula arrives from an untrusted request body. It must never be eval()'d."""
+        for hostile in ["__import__('os').system('echo pwned')",
+                        "open('/etc/passwd').read()",
+                        "Quantity.__class__"]:
+            cols = self.base() + [{"name": "Evil", "type": "derived", "formula": hostile}]
+            with pytest.raises(ValueError):
+                generate_dataset(cols, 10, seed=9)
+
+
+def cat_col(name="Tier", **overrides):
+    col = {"name": name, "type": "categorical",
+           "categories": ["bronze", "silver", "gold"], "nanPercentage": 0}
+    col.update(overrides)
+    return col
+
+
+class TestCategoricalColumns:
+    def test_only_emits_declared_categories(self):
+        rows, _ = generate_dataset([cat_col()], 300, seed=3)
+        assert {r["Tier"] for r in rows} <= {"bronze", "silver", "gold"}
+
+    def test_uniform_balance_by_default(self):
+        rows, _ = generate_dataset([cat_col()], 300, seed=3)
+        counts = {c: [r["Tier"] for r in rows].count(c) for c in ("bronze", "silver", "gold")}
+        assert counts == {"bronze": 100, "silver": 100, "gold": 100}
+
+    def test_weights_are_honoured_exactly(self):
+        col = cat_col(categoryWeights=[0.5, 0.3, 0.2])
+        rows, _ = generate_dataset([col], 1000, seed=3)
+        values = [r["Tier"] for r in rows]
+        assert values.count("bronze") == 500
+        assert values.count("silver") == 300
+        assert values.count("gold") == 200
+
+    def test_weights_sum_to_row_count_when_they_do_not_divide_evenly(self):
+        col = cat_col(categoryWeights=[1, 1, 1])
+        rows, _ = generate_dataset([col], 100, seed=3)
+        values = [r["Tier"] for r in rows]
+        assert sum(values.count(c) for c in ("bronze", "silver", "gold")) == 100
+
+    def test_report_records_requested_and_actual_balance(self):
+        col = cat_col(categoryWeights=[0.5, 0.3, 0.2])
+        _, report = generate_dataset([col], 1000, seed=3)
+        col_report = report["columns"][0]
+        assert col_report["actual_counts"] == {"bronze": 500, "silver": 300, "gold": 200}
+        assert col_report["requested_distribution_pct"]["bronze"] == 50.0
+
+    def test_missing_values_still_exact_on_categoricals(self):
+        col = cat_col(nanPercentage=10)
+        rows, report = generate_dataset([col], 500, seed=3)
+        assert sum(1 for r in rows if r["Tier"] is None) == 50
+        assert report["columns"][0]["actual_missing_pct"] == 10.0
+
+    def test_reproducible_from_seed(self):
+        a, _ = generate_dataset([cat_col()], 200, seed=11)
+        b, _ = generate_dataset([cat_col()], 200, seed=11)
+        assert a == b
+
     def test_outliers_injected_outside_range(self):
         col = num_col(addOutliers=True, outlierPercentage=10)
         rows, report = generate_dataset([col], 1000, seed=7)

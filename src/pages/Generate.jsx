@@ -4,8 +4,9 @@ import {
   Download, FileText, Database, Settings, Wand2, Plus, Trash2, AlertTriangle,
   WifiOff, ServerCrash, RefreshCw, ChevronDown, ChevronLeft, ChevronRight,
   ChevronsLeft, ChevronsRight, ClipboardCheck, Timer, Braces, Brain, Hash,
-  Cpu, CheckCircle2, Layers,
+  Cpu, CheckCircle2, Layers, Upload, Link2, Sigma, ShieldCheck, X,
 } from 'lucide-react';
+import { inferSchema } from '../components/InferSchema';
 import { Input } from '../components/UI/Input';
 import { NumberStepper } from '../components/UI/NumberStepper';
 import { Slider } from '../components/UI/Slider';
@@ -29,6 +30,81 @@ function SectionLabel({ children }) {
   );
 }
 
+/* ════════ Category editor: levels with an exact class balance ════════ */
+
+function CategoryEditor({ column, rowCount, onChange }) {
+  const categories = column.categories || [];
+  const weights = column.categoryWeights || [];
+
+  const setCategories = raw => {
+    const next = raw.split(',').map(c => c.trim()).filter(Boolean);
+    // Keep any weight already set for a level that survived the edit
+    const nextWeights = next.map(c => {
+      const prev = categories.indexOf(c);
+      return prev >= 0 && weights[prev] != null ? weights[prev] : 1 / next.length;
+    });
+    onChange({ categories: next, categoryWeights: nextWeights });
+  };
+
+  const setWeight = (idx, pct) => {
+    const next = [...(weights.length === categories.length
+      ? weights
+      : categories.map(() => 1 / categories.length))];
+    next[idx] = pct / 100;
+    onChange({ categoryWeights: next });
+  };
+
+  const total = weights.reduce((a, b) => a + (b || 0), 0) || 1;
+  const rows = Math.max(1, Number(rowCount) || 0);
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <SectionLabel>Categories</SectionLabel>
+        <Input
+          value={categories.join(', ')}
+          onChange={e => setCategories(e.target.value)}
+          placeholder="bronze, silver, gold"
+        />
+      </div>
+
+      {categories.length > 0 && (
+        <div
+          className="rounded-lg p-3 space-y-3"
+          style={{ background: 'rgba(8,15,40,0.5)', border: '1px solid rgba(56,189,248,0.10)' }}
+        >
+          <div className="flex items-center justify-between">
+            <SectionLabel>Class balance</SectionLabel>
+            <span className="text-xs text-slate-500 mb-2">honoured to the row</span>
+          </div>
+          {categories.map((cat, i) => {
+            const share = (weights[i] ?? 1 / categories.length) / total;
+            return (
+              <div key={cat} className="space-y-1.5">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-300 font-medium">{cat}</span>
+                  <span className="text-slate-500">
+                    {(share * 100).toFixed(1)}% · <span className="text-sky-400">{Math.round(share * rows)} rows</span>
+                  </span>
+                </div>
+                <Slider
+                  value={[Math.round(share * 100)]}
+                  max={100}
+                  step={1}
+                  onValueChange={v => setWeight(i, v[0])}
+                />
+              </div>
+            );
+          })}
+          <p className="text-xs text-slate-500">
+            Weights are normalised, so they never have to add up to 100 exactly.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── CSV-safe value: quote fields containing commas, quotes or newlines ── */
 function escapeCsvValue(value) {
   if (value == null) return '';
@@ -48,6 +124,8 @@ const TYPE_CHIP_STYLES = {
   boolean: { color: '#6ee7b7', background: 'rgba(52,211,153,0.14)',  border: '1px solid rgba(52,211,153,0.3)' },
   email:   { color: '#f9a8d4', background: 'rgba(244,114,182,0.14)', border: '1px solid rgba(244,114,182,0.3)' },
   label:   { color: '#fcd34d', background: 'rgba(251,191,36,0.14)',  border: '1px solid rgba(251,191,36,0.3)' },
+  categorical: { color: '#fcd34d', background: 'rgba(251,191,36,0.14)', border: '1px solid rgba(251,191,36,0.3)' },
+  derived: { color: '#5eead4', background: 'rgba(45,212,191,0.14)',  border: '1px solid rgba(45,212,191,0.3)' },
 };
 
 function MetaChip({ icon, label, value, accent = '#7dd3fc' }) {
@@ -114,6 +192,30 @@ function ReportColumnCard({ col }) {
           {col.type}
         </span>
       </div>
+
+      {col.formula && (
+        <div className="text-xs">
+          <span className="text-slate-500">Formula</span>
+          <p className="mt-1 font-mono text-[11px] text-teal-300 break-all">{col.formula}</p>
+          {col.undefined_cells > 0 && (
+            <p className="mt-1 text-amber-400">
+              {col.undefined_cells} undefined (division by zero)
+            </p>
+          )}
+        </div>
+      )}
+
+      {col.actual_counts && (
+        <div className="space-y-1">
+          <span className="text-xs text-slate-500">Class balance</span>
+          {Object.entries(col.actual_counts).map(([level, count]) => (
+            <div key={level} className="flex items-center justify-between text-xs">
+              <span className="text-slate-400 truncate mr-2">{level}</span>
+              <span className="text-amber-300 font-mono flex-shrink-0">{count}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {col.requested_missing_pct != null && (
         <div className="space-y-1">
@@ -202,6 +304,10 @@ const Generate = () => {
   const [generateError, setGenerateError] = useState(null); // { type, title, message }
   const [activeTab, setActiveTab] = useState('manual');
   const [distributionType, setDistributionType] = useState('balanced');
+  const [correlations, setCorrelations] = useState([]);
+  const [inferSummary, setInferSummary] = useState(null);
+  const [inferError, setInferError] = useState(null);
+  const sampleInputRef = useRef(null);
 
   const tableRef = useRef(null);
   const previewRef = useRef(null);
@@ -234,18 +340,95 @@ const Generate = () => {
 
   const addColumn = () => {
     const names = newColumnName.split(',').map(n => n.trim()).filter(n => n.length > 0);
-    const unique = names.filter((n, i, self) => self.indexOf(n) === i);
+    const unique = names.filter((n, i, self) => self.findIndex(m => m.toLowerCase() === n.toLowerCase()) === i);
     const newCols = unique
-      .filter(n => !columns.find(c => c.name === n))
+      .filter(n => !columns.find(c => c.name.toLowerCase() === n.toLowerCase()))
       .map(n => ({ name: n, type: 'string', nanPercentage: 0, addNoise: false, noiseLevel: 0, addOutliers: false, outlierPercentage: 0, numberType: 'integers' }));
     if (newCols.length) { setColumns([...columns, ...newCols]); setNewColumnName(''); }
   };
 
-  const removeColumn = idx => setColumns(columns.filter((_, i) => i !== idx));
+  // Shared by the Manual and Templates tabs, so a loaded template can be extended.
+  const addColumnField = (id, label = 'Add New Column') => (
+    <div>
+      <SectionLabel>{label}</SectionLabel>
+      <div className="flex gap-2">
+        <Input
+          id={id}
+          value={newColumnName}
+          onChange={e => setNewColumnName(e.target.value)}
+          placeholder="Enter column name (comma-separated for multiple)"
+          onKeyPress={e => e.key === 'Enter' && addColumn()}
+          className="flex-1"
+        />
+        <button
+          onClick={addColumn}
+          className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500 to-indigo-500 text-white hover:from-sky-400 hover:to-indigo-400 shadow-lg shadow-sky-500/30 transition-all duration-200 active:scale-95 flex-shrink-0"
+          title="Add column"
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+
+  const removeColumn = idx => {
+    const gone = columns[idx]?.name;
+    setColumns(columns.filter((_, i) => i !== idx));
+    setCorrelations(cs => cs.filter(c => c.a !== gone && c.b !== gone));
+  };
   const updateColumn = (idx, updates) => {
     const copy = [...columns];
     copy[idx] = { ...copy[idx], ...updates };
     setColumns(copy);
+  };
+
+  // Columns whose values the engine can correlate or use in a formula.
+  const numericColumnNames = columns
+    .filter(c => c.type === 'number' && c.name)
+    .map(c => c.name);
+
+  /** Strip UI-only state and only send fields the engine understands. */
+  const serializeColumn = col => {
+    const out = { ...col };
+    delete out.useMoments;
+    if (col.type !== 'number' || !col.useMoments) {
+      delete out.mean;
+      delete out.stdDev;
+    }
+    if (col.type !== 'categorical') {
+      delete out.categories;
+      delete out.categoryWeights;
+    }
+    if (col.type !== 'derived') delete out.formula;
+    return out;
+  };
+
+  const addCorrelation = () => {
+    const used = new Set(correlations.flatMap(c => [c.a, c.b]));
+    const a = numericColumnNames.find(n => !used.has(n)) || numericColumnNames[0];
+    const b = numericColumnNames.find(n => n !== a) || numericColumnNames[1];
+    if (a && b) setCorrelations([...correlations, { a, b, rho: 0.5 }]);
+  };
+  const updateCorrelation = (idx, updates) =>
+    setCorrelations(correlations.map((c, i) => (i === idx ? { ...c, ...updates } : c)));
+  const removeCorrelation = idx =>
+    setCorrelations(correlations.filter((_, i) => i !== idx));
+
+  /** Fit-from-sample. The file is read, reduced to statistics, and dropped — never uploaded. */
+  const handleSampleFile = async file => {
+    if (!file) return;
+    setInferError(null);
+    try {
+      const text = await file.text();
+      const { columns: inferred, correlations: pairs, stats } = inferSchema(text);
+      setColumns(inferred);
+      setCorrelations(pairs);
+      setSelectedTemplate('');
+      setInferSummary({ ...stats, fileName: file.name });
+    } catch (err) {
+      setInferSummary(null);
+      setInferError(err.message || 'Could not read that file.');
+    }
   };
 
   const generateFromTemplate = () => {
@@ -258,12 +441,22 @@ const Generate = () => {
         { name: 'OrderDate',      type: 'date' },
         { name: 'ProductID',      type: 'string' },
         { name: 'ProductName',    type: 'string' },
-        { name: 'Category',       type: 'string' },
-        { name: 'Quantity',       type: 'number', numberType: 'integers', minValue: 1,  maxValue: 5    },
-        { name: 'UnitPrice',      type: 'number', numberType: 'decimals', minValue: 5,  maxValue: 500  },
-        { name: 'TotalAmount',    type: 'number', numberType: 'decimals', minValue: 10, maxValue: 2500 },
-        { name: 'PaymentMethod',  type: 'string' },
-        { name: 'DeliveryStatus', type: 'string' },
+        { name: 'Category',       type: 'categorical',
+          categories: ['Electronics', 'Apparel', 'Home', 'Beauty', 'Sports'],
+          categoryWeights: [0.35, 0.25, 0.2, 0.12, 0.08] },
+        { name: 'Quantity',       type: 'number', numberType: 'integers', minValue: 1,  maxValue: 5,
+          useMoments: true, mean: 2, stdDev: 1 },
+        { name: 'UnitPrice',      type: 'number', numberType: 'decimals', minValue: 5,  maxValue: 500,
+          useMoments: true, mean: 60, stdDev: 55 },
+        // Exactly Quantity × UnitPrice in every row — not a lookalike number
+        { name: 'TotalAmount',    type: 'derived', numberType: 'decimals',
+          formula: 'Quantity * UnitPrice' },
+        { name: 'PaymentMethod',  type: 'categorical',
+          categories: ['Card', 'PayPal', 'Bank Transfer', 'Gift Card'],
+          categoryWeights: [0.62, 0.24, 0.1, 0.04] },
+        { name: 'DeliveryStatus', type: 'categorical',
+          categories: ['Delivered', 'Shipped', 'Processing', 'Returned'],
+          categoryWeights: [0.7, 0.15, 0.1, 0.05] },
         { name: 'IsFirstPurchase', type: 'boolean' },
       ],
       financial: [
@@ -345,6 +538,8 @@ const Generate = () => {
     };
     if (selectedTemplate && templates[selectedTemplate]) {
       setColumns(templates[selectedTemplate]);
+      setCorrelations([]);          // a template's columns replace whatever was paired before
+      setInferSummary(null);
       toast({ title: 'Template Loaded', description: `Loaded ${templates[selectedTemplate].length} columns.` });
     }
   };
@@ -381,7 +576,11 @@ const Generate = () => {
           distributionType,
           customInstructions,
           template: selectedTemplate,
-          columns,
+          columns: columns.map(serializeColumn),
+          // Only pairs whose columns still exist and are still numeric
+          correlations: correlations.filter(c => numericColumnNames.includes(c.a)
+                                              && numericColumnNames.includes(c.b)
+                                              && c.a !== c.b),
         };
 
     try {
@@ -597,29 +796,91 @@ const Generate = () => {
                     <Wand2 className="h-4.5 w-4.5" />
                     Load Template
                   </button>
+
+                  {/* Once a template is loaded, it can be extended like a manual schema */}
+                  {columns.length > 0 && addColumnField('new-column-template', 'Add More Columns')}
                 </TabsContent>
 
                 {/* ── Manual Tab ── */}
                 <TabsContent value="manual" className="space-y-4">
-                  <div>
-                    <SectionLabel>Add New Column</SectionLabel>
-                    <div className="flex gap-2">
-                      <Input
-                        id="new-column"
-                        value={newColumnName}
-                        onChange={e => setNewColumnName(e.target.value)}
-                        placeholder="Enter column name (comma-separated for multiple)"
-                        onKeyPress={e => e.key === 'Enter' && addColumn()}
-                        className="flex-1"
-                      />
-                      <button
-                        onClick={addColumn}
-                        className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500 to-indigo-500 text-white hover:from-sky-400 hover:to-indigo-400 shadow-lg shadow-sky-500/30 transition-all duration-200 active:scale-95 flex-shrink-0"
-                        title="Add column"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
+                  {addColumnField('new-column')}
+
+                  {/* ── Fit from a sample. The file never leaves the browser. ── */}
+                  <div className="pt-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="h-px flex-1" style={{ background: 'rgba(56,189,248,0.12)' }} />
+                      <span className="text-xs uppercase tracking-widest text-slate-600">or</span>
+                      <div className="h-px flex-1" style={{ background: 'rgba(56,189,248,0.12)' }} />
                     </div>
+
+                    <input
+                      ref={sampleInputRef}
+                      type="file"
+                      accept=".csv,text/csv"
+                      className="hidden"
+                      onChange={e => { handleSampleFile(e.target.files?.[0]); e.target.value = ''; }}
+                    />
+                    <button
+                      onClick={() => sampleInputRef.current?.click()}
+                      className="w-full rounded-xl p-4 text-left transition-all duration-200 hover:border-sky-400/40 group"
+                      style={{ background: 'rgba(15,23,52,0.5)', border: '1px dashed rgba(56,189,248,0.25)' }}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 p-2 rounded-lg bg-sky-500/10 border border-sky-400/20 group-hover:bg-sky-500/20 transition-colors">
+                          <Upload className="h-4 w-4 text-sky-400" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-slate-200">Describe it from a sample CSV</p>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            Reads a file you already have and fills in the schema: types, ranges,
+                            averages, class balance and the strongest relationships.
+                          </p>
+                          <p className="text-xs mt-1.5 flex items-center gap-1.5 text-emerald-400/90">
+                            <ShieldCheck className="h-3 w-3 shrink-0" />
+                            Parsed in your browser. The file is never uploaded.
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+
+                    {inferError && (
+                      <div
+                        className="mt-3 rounded-lg p-3 flex items-start gap-2"
+                        style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}
+                      >
+                        <AlertTriangle className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
+                        <p className="text-xs text-red-300">{inferError}</p>
+                      </div>
+                    )}
+
+                    {inferSummary && (
+                      <div
+                        className="mt-3 rounded-lg p-3"
+                        style={{ background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.22)' }}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-start gap-2 min-w-0">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-400 mt-0.5 shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-xs text-emerald-300 font-medium truncate">
+                                Schema drafted from {inferSummary.fileName}
+                              </p>
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                {inferSummary.columnsFound} columns, {inferSummary.rowsRead.toLocaleString()} rows read
+                                {inferSummary.truncated && ' (sampled)'}. Edit anything below — it&apos;s a draft, not a contract.
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setInferSummary(null)}
+                            className="p-1 rounded text-slate-600 hover:text-slate-400 shrink-0"
+                            title="Dismiss"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </TabsContent>
 
@@ -825,6 +1086,8 @@ const Generate = () => {
                             <SelectContent>
                               <SelectItem value="string">Text</SelectItem>
                               <SelectItem value="number">Number</SelectItem>
+                              <SelectItem value="categorical">Category</SelectItem>
+                              <SelectItem value="derived">Formula</SelectItem>
                               <SelectItem value="email">Email</SelectItem>
                               <SelectItem value="date">Date</SelectItem>
                               <SelectItem value="boolean">Boolean</SelectItem>
@@ -832,7 +1095,7 @@ const Generate = () => {
                           </Select>
                         </div>
 
-                        {column.type === 'number' && (
+                        {(column.type === 'number' || column.type === 'derived') && (
                           <div>
                             <SectionLabel>Number Type</SectionLabel>
                             <Select value={column.numberType || 'integers'} onValueChange={v => updateColumn(index, { numberType: v })}>
@@ -842,12 +1105,41 @@ const Generate = () => {
                               <SelectContent>
                                 <SelectItem value="integers">Integers Only</SelectItem>
                                 <SelectItem value="decimals">Decimals Only</SelectItem>
-                                <SelectItem value="mixed">Mixed</SelectItem>
+                                {column.type === 'number' && <SelectItem value="mixed">Mixed</SelectItem>}
                               </SelectContent>
                             </Select>
                           </div>
                         )}
                       </div>
+
+                      {/* Formula (derived columns) — exact arithmetic, enforced per row */}
+                      {column.type === 'derived' && (
+                        <div>
+                          <SectionLabel>Formula</SectionLabel>
+                          <Input
+                            value={column.formula || ''}
+                            onChange={e => updateColumn(index, { formula: e.target.value })}
+                            placeholder="Quantity * UnitPrice"
+                            className="font-mono text-sm"
+                          />
+                          <p className="mt-1.5 text-xs text-slate-500">
+                            {numericColumnNames.length
+                              ? <>Use <span className="text-sky-400">+ − × ÷ ( )</span> with number columns above: {' '}
+                                  <span className="text-slate-400 font-mono">{numericColumnNames.join(', ')}</span>.
+                                  Holds exactly in every row.</>
+                              : 'Add a number column above first — a formula needs something to compute from.'}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Categories with an exact class balance */}
+                      {column.type === 'categorical' && (
+                        <CategoryEditor
+                          column={column}
+                          rowCount={rowCount}
+                          onChange={updates => updateColumn(index, updates)}
+                        />
+                      )}
 
                       {/* Min / Max for numbers */}
                       {column.type === 'number' && (
@@ -866,6 +1158,71 @@ const Generate = () => {
                               onChange={v => updateColumn(index, { maxValue: v === '' ? 0 : Number(v) })}
                             />
                           </div>
+                        </div>
+                      )}
+
+                      {/* Distribution shape. The single highest-leverage control in the app:
+                          without it the engine parks a bell at the midpoint of the range,
+                          which is the wrong shape for any skewed column. */}
+                      {column.type === 'number' && (
+                        <div
+                          className="rounded-lg p-3 space-y-3"
+                          style={{ background: 'rgba(8,15,40,0.5)', border: '1px solid rgba(56,189,248,0.10)' }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Sigma className="h-3.5 w-3.5 text-sky-400" />
+                              <div>
+                                <p className="text-sm font-medium text-slate-300">Describe the distribution</p>
+                                <p className="text-xs text-slate-500">
+                                  Where the values actually cluster, not just their limits
+                                </p>
+                              </div>
+                            </div>
+                            <Switch
+                              checked={!!column.useMoments}
+                              onCheckedChange={c => {
+                                const lo = column.minValue ?? 0;
+                                const hi = column.maxValue ?? 100;
+                                updateColumn(index, {
+                                  useMoments: c,
+                                  mean: column.mean ?? Math.round(((lo + hi) / 2) * 100) / 100,
+                                  stdDev: column.stdDev ?? Math.round(((hi - lo) / 6) * 100) / 100,
+                                });
+                              }}
+                            />
+                          </div>
+
+                          {column.useMoments && (
+                            <>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <SectionLabel>Average</SectionLabel>
+                                  <NumberStepper
+                                    value={column.mean ?? 0}
+                                    onChange={v => updateColumn(index, { mean: v === '' ? 0 : Number(v) })}
+                                  />
+                                </div>
+                                <div>
+                                  <SectionLabel>Spread (± std dev)</SectionLabel>
+                                  <NumberStepper
+                                    value={column.stdDev ?? 1}
+                                    onChange={v => updateColumn(index, { stdDev: v === '' ? 1 : Number(v) })}
+                                  />
+                                </div>
+                              </div>
+                              <p className="text-xs text-slate-500">
+                                Most values will land near <span className="text-sky-400">{column.mean ?? 0}</span>,
+                                roughly {' '}
+                                <span className="text-sky-400">
+                                  {Math.round(((column.mean ?? 0) - (column.stdDev ?? 0)) * 100) / 100}
+                                  {' – '}
+                                  {Math.round(((column.mean ?? 0) + (column.stdDev ?? 0)) * 100) / 100}
+                                </span>
+                                , still clipped to the min/max above.
+                              </p>
+                            </>
+                          )}
                         </div>
                       )}
 
@@ -943,6 +1300,95 @@ const Generate = () => {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* 2b. Correlations — joint structure, stated from domain knowledge */}
+            {!isNlpMode && numericColumnNames.length >= 2 && (
+              <div className="glass-panel p-6">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <Link2 className="h-4 w-4 text-sky-400" />
+                    <h2 className="text-lg font-semibold text-slate-100">Relationships</h2>
+                  </div>
+                  <button
+                    onClick={addCorrelation}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-sky-400 hover:text-sky-300 transition-colors"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add
+                  </button>
+                </div>
+                <p className="text-sm text-slate-500 mb-4">
+                  How two number columns move together. Optional, and worth knowing:{' '}
+                  <span className="text-slate-400">
+                    these make rows look plausible, they don&apos;t make a model more accurate
+                  </span>{' '}
+                  — for an exact rule like <span className="font-mono text-slate-400">Total = Qty × Price</span>,
+                  use a Formula column instead.
+                </p>
+
+                {correlations.length === 0 ? (
+                  <p className="text-sm text-slate-600 italic">
+                    None set. Values in different columns will be paired at random.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {correlations.map((corr, i) => (
+                      <div
+                        key={i}
+                        className="rounded-xl p-4 space-y-3"
+                        style={{ background: 'rgba(15,23,52,0.65)', border: '1px solid rgba(56,189,248,0.14)' }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Select value={corr.a} onValueChange={v => updateCorrelation(i, { a: v })}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {numericColumnNames.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          <span className="text-slate-600 text-xs shrink-0">and</span>
+                          <Select value={corr.b} onValueChange={v => updateCorrelation(i, { b: v })}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {numericColumnNames.filter(n => n !== corr.a)
+                                .map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          <button
+                            onClick={() => removeCorrelation(i)}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/15 transition-all duration-150 shrink-0"
+                            title="Remove relationship"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+
+                        <div>
+                          <div className="flex justify-between items-center mb-2">
+                            <SectionLabel>Strength</SectionLabel>
+                            <span className="text-xs font-mono font-semibold text-sky-400 bg-sky-400/10 px-2 py-0.5 rounded-md border border-sky-400/20">
+                              {corr.rho > 0 ? '+' : ''}{corr.rho.toFixed(2)}
+                            </span>
+                          </div>
+                          <Slider
+                            value={[Math.round(corr.rho * 100)]}
+                            min={-99}
+                            max={99}
+                            step={1}
+                            onValueChange={v => updateCorrelation(i, { rho: v[0] / 100 })}
+                          />
+                          <p className="mt-1.5 text-xs text-slate-500">
+                            {corr.rho > 0.15
+                              ? <>When <span className="text-slate-400">{corr.a}</span> is high, <span className="text-slate-400">{corr.b}</span> tends to be high.</>
+                              : corr.rho < -0.15
+                                ? <>When <span className="text-slate-400">{corr.a}</span> is high, <span className="text-slate-400">{corr.b}</span> tends to be low.</>
+                                : 'Near zero: effectively unrelated.'}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -1323,6 +1769,40 @@ const Generate = () => {
                               <ReportColumnCard key={i} col={c} />
                             ))}
                           </div>
+
+                          {/* Correlations: what you asked for vs. what you got */}
+                          {report.correlations?.length > 0 && (
+                            <div
+                              className="relative rounded-xl p-3.5 space-y-2"
+                              style={{
+                                background: 'linear-gradient(160deg, rgba(15,23,52,0.85), rgba(10,16,38,0.75))',
+                                border: '1px solid rgba(56,189,248,0.12)',
+                              }}
+                            >
+                              <div className="flex items-center gap-2">
+                                <Link2 className="h-3.5 w-3.5 text-sky-400" />
+                                <span className="text-sm font-semibold text-slate-100">Relationships</span>
+                              </div>
+                              {report.correlations.map((c, i) => (
+                                <div key={i} className="flex items-center justify-between text-xs">
+                                  <span className="text-slate-400 truncate mr-2">
+                                    {c.columns[0]} ↔ {c.columns[1]}
+                                  </span>
+                                  <span className="flex items-center gap-1 flex-shrink-0">
+                                    <span className="text-slate-400 font-mono">{c.requested_r.toFixed(2)}</span>
+                                    <span className="text-slate-600">→</span>
+                                    <span className="text-emerald-400 font-mono font-semibold">
+                                      {c.actual_r.toFixed(2)}
+                                    </span>
+                                  </span>
+                                </div>
+                              ))}
+                              <p className="text-xs text-slate-500 pt-1">
+                                Requested vs. achieved. Rank matching gets close without touching the
+                                values themselves, so every other guarantee above still holds.
+                              </p>
+                            </div>
+                          )}
 
                           <p className="relative text-xs text-slate-500 leading-relaxed">
                             Every percentage above is enforced exactly by the statistical engine. Run again with
