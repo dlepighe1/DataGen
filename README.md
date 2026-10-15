@@ -26,13 +26,14 @@ Early versions asked an LLM to emit raw CSV. That's statistically unsound: token
                        ┌──────────────────────────────────────────┐
  column schema  ─────► │  LLM (semantic layer)                    │
  custom instructions   │  Gemma 4 31B → GPT-OSS → Nemotron →      │
-                       │  Qwen → Llama 3.3 → GPT-4o-mini (paid)   │
+                       │  Qwen → Llama 3.3 → GPT-4o-mini →        │
+                       │  GPT-3.5 Turbo (last two are paid)       │
                        │  Generates a small pool of COHERENT      │
                        │  text records (name ⇄ email match),      │
                        │  honoring custom instructions.           │
-                       │  Offline fallback: curated local pools.  │
+                       │  Over 60 s or offline: local pools.      │
                        └───────────────────┬──────────────────────┘
-                                           │ ~80 records, expanded to
+                                           │ 20–80 records, expanded to
                                            │ ~1,500 unique identities
                        ┌───────────────────▼──────────────────────┐
                        │  NumPy (statistical core)                │
@@ -48,7 +49,11 @@ Early versions asked an LLM to emit raw CSV. That's statistically unsound: token
                           table + data quality report (JSON)
 ```
 
-The LLM **never emits rows**. It only produces a pool of semantically coherent text records; every number, date, boolean, ID, missing cell, and outlier is synthesized locally. As a result, 10K rows take about a second, parameters are enforced exactly, and the same seed always returns the same dataset.
+The LLM **never emits rows**. It only produces a pool of semantically coherent text records; every number, date, boolean, ID, missing cell, and outlier is synthesized locally. As a result:
+
+- **Speed is set by the LLM call, not the row count.** The statistical core builds 10K rows in about 0.06 s (benchmark, hardware-dependent). End-to-end time is dominated by the single text-pool request: typically a few seconds, never more than a 60 s budget before the local pools take over. The pool grows from 20 records for small tables to a cap of 80, so requests up to 80 rows get slightly slower; beyond that, row count barely matters.
+- **Parameters are enforced exactly**, whatever the size.
+- **The same seed reproduces every number, date, boolean, ID, missing cell and outlier.** Text columns are reproducible only from the offline engine: the LLM samples at temperature 1.0 and may answer from a different model in the chain, so with an API key the text content varies between runs even with a fixed seed.
 
 ### Data quality report
 
@@ -76,8 +81,8 @@ The LLM writes a pool of unique domain examples (your custom instructions set th
 - **4 NLP task types**: classification, semantic retrieval, QA, and paraphrase pairs with controllable class balance and negative ratios
 - **Deliberately dirty data**: per-column sliders for missing %, Gaussian noise, and outliers, plus a global "distorted" mode that mangles text casing, mixes date formats, and dirties booleans for cleaning practice
 - **Custom instructions**: free-text steering of semantic content, passed verbatim to the LLM ("all patients are pediatric", "merchants are coffee shops")
-- **Seeded reproducibility**: share a seed and schema, and anyone can regenerate your exact dataset
-- **Resilient backend**: a 7-model fallback chain (free-tier models first, paid models as last resort) with status-code-aware retries, typed error taxonomy, matching recovery UI states, and a fully offline local engine when no model is reachable
+- **Seeded reproducibility**: share a seed and schema, and anyone can regenerate the exact numeric, date, boolean, ID, missing-value and outlier structure; text columns match exactly only on the offline engine (LLM text varies run to run)
+- **Resilient backend**: a 7-model fallback chain (5 free-tier models first, 2 paid models as last resort) with status-code-aware failover (a timeout or 429 moves on to the next model; a bad key stops immediately) under a 60 s overall budget, typed error taxonomy, matching recovery UI states, and a fully offline local engine when no model is reachable
 - **Rate limiting**: per-IP limits (10/min, 60/hr, 200/day) protect the free tier
 - **3 export formats**: RFC-4180-safe CSV, JSON, and TXT
 
@@ -182,7 +187,7 @@ Returns `{ status, table, report }` where `report` is the quality audit. Errors 
 
 ## Benchmarks
 
-Four reproducible benchmarks live in `backend/benchmark/` (deps:
+Five reproducible benchmarks, plus a plotting script, live in `backend/benchmark/` (deps:
 `pip install -r backend/benchmark/requirements.txt`). All numbers in
 [`benchmark/RESULTS.md`](backend/benchmark/RESULTS.md) come straight from these
 scripts — nothing is hand-written.
@@ -197,12 +202,12 @@ python -m benchmark.cost_analysis          # hybrid vs. naive LLM-emits-rows cos
 python -m benchmark.plots                  # render figures/
 ```
 
-Every arm runs over **5 seeds** and **3 model families** (LogisticRegression,
+Every tabular TSTR arm runs over **5 seeds** and **3 model families** (LogisticRegression,
 RandomForest, HistGradientBoosting), reported as mean ± std, against two real
 competitors: a **Gaussian copula** (SDV's `copulas` + `rdt`) *fit on the real dataset*,
 and **Faker** given the identical bounds.
 
-- **Mixed-type TSTR on UCI Adult — the centerpiece.** 48,842 real rows, 6 numeric +
+- **Mixed-type TSTR on UCI Adult — the centerpiece.** 48,842 real rows (stratified subsample of 10,000), 6 numeric +
   8 categorical, 76/24 imbalanced. Trained **only** on DataGen output and tested on a
   real held-out split, DataGen reaches **98.5% of real-data macro-F1**, *beating* a
   **Gaussian copula that was fit on the real dataset* (96.7%) — because DataGen honours
@@ -234,7 +239,7 @@ and **Faker** given the identical bounds.
 - **Parameter fidelity.** 0 cells of error on requested missing %; exact outlier
   counts with 100% landing out of range; 100% range adherence over 40K values;
   KS p≈0.99 against the target distribution; byte-identical reproduction across
-  seeds; 10K rows in 0.06 s.
+  seeds; 10K rows in 0.06 s for the statistical core (excludes the LLM call).
 - **Cost.** Confining the LLM to semantics makes generation **flat-cost in N**:
   ~$0.0019 per run regardless of size, vs. a naive LLM-emits-every-row approach at
   ~$0.15 for 10K rows (**~79× cheaper**, and no 16-call chunking around the token
