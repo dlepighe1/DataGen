@@ -238,8 +238,8 @@ and **Faker** given the identical bounds.
   balance (750/750) and label noise (exactly 5%) are exact.
 - **Parameter fidelity.** 0 cells of error on requested missing %; exact outlier
   counts with 100% landing out of range; 100% range adherence over 40K values;
-  KS p≈0.99 against the target distribution; byte-identical reproduction across
-  seeds; 10K rows in 0.06 s for the statistical core (excludes the LLM call).
+  KS p≈0.99 against the target distribution; byte-identical reproduction for the
+  same seed; 10K rows in 0.06 s for the statistical core (excludes the LLM call).
 - **Cost.** Confining the LLM to semantics makes generation **flat-cost in N**:
   ~$0.0019 per run regardless of size, vs. a naive LLM-emits-every-row approach at
   ~$0.15 for 10K rows (**~79× cheaper**, and no 16-call chunking around the token
